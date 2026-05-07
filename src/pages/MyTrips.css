@@ -1,0 +1,29 @@
+.mytrips-page{display:flex;flex-direction:column;height:100%;overflow:hidden;background:#f4f6f9;font-family:"Segoe UI",system-ui,sans-serif;}
+.mytrips-topbar{background:#0f2d52;padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.mytrips-topbar-title{font-size:15px;font-weight:600;color:white;}
+.mytrips-new-btn{padding:7px 14px;background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.2);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;}
+.mytrips-new-btn:hover{background:rgba(255,255,255,.25);}
+.mytrips-content{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
+.mytrips-tabs{display:flex;border-bottom:2px solid #dde4ec;margin-bottom:4px;}
+.mytrips-tab{flex:1;padding:10px;background:none;border:none;font-size:13px;font-weight:500;color:#6b7e94;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-2px;}
+.mytrips-tab.active{color:#0f2d52;border-bottom-color:#0f2d52;}
+.mytrips-card{background:white;border-radius:14px;padding:16px;border:1.5px solid #dde4ec;display:flex;flex-direction:column;gap:10px;}
+.mytrips-card-header{display:flex;justify-content:space-between;align-items:center;}
+.mytrips-card-role{font-size:12px;font-weight:500;color:#6b7e94;}
+.mytrips-card-statut{font-size:12px;font-weight:600;}
+.mytrips-card-titre{font-size:16px;font-weight:600;color:#0f2d52;}
+.mytrips-card-date{font-size:13px;color:#6b7e94;}
+.mytrips-equip{background:#f4f6f9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
+.mytrips-equip-label{font-size:12px;font-weight:500;color:#6b7e94;}
+.mytrips-equip-list{display:flex;flex-direction:column;gap:6px;}
+.mytrips-equip-item{display:flex;align-items:center;gap:8px;font-size:13px;}
+.mytrips-equip-av{width:28px;height:28px;border-radius:50%;background:#0f2d52;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;}
+.mytrips-equip-statut{margin-left:auto;font-size:11px;font-weight:500;}
+.mytrips-equip-statut.accepte{color:#0f6e56;}
+.mytrips-equip-statut.paye{color:#185fa5;}
+.mytrips-equip-statut.en_attente{color:#d97706;}
+.mytrips-skipper-info{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#6b7e94;}
+.mytrips-prix{font-size:16px;font-weight:700;color:#0f2d52;}
+.mytrips-card-actions{display:flex;gap:8px;}
+.mytrips-btn-sec{flex:1;padding:9px;background:white;color:#0f2d52;border:1.5px solid #dde4ec;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;}
+.mytrips-btn-sec:hover{background:#e8f0f9;border-color:#0f2d52;}

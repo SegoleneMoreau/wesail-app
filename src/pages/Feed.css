@@ -1,0 +1,28 @@
+.feed-page{display:flex;flex-direction:column;height:100%;overflow:hidden;background:#f4f6f9;font-family:"Segoe UI",system-ui,sans-serif;}
+.feed-topbar{background:#0f2d52;padding:0 20px;height:52px;display:flex;align-items:center;flex-shrink:0;}
+.feed-topbar-title{font-size:15px;font-weight:600;color:white;}
+.feed-content{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
+.feed-composer{background:white;border-radius:14px;padding:16px;border:1.5px solid #dde4ec;display:flex;flex-direction:column;gap:12px;}
+.feed-composer-top{display:flex;gap:12px;}
+.feed-composer-av{width:40px;height:40px;border-radius:50%;background:#0f2d52;color:white;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;}
+.feed-composer-input{flex:1;padding:10px 14px;border:1.5px solid #dde4ec;border-radius:10px;font-size:14px;font-family:inherit;outline:none;resize:none;}
+.feed-composer-input:focus{border-color:#185fa5;}
+.feed-composer-bottom{display:flex;align-items:center;justify-content:space-between;}
+.feed-vis-btns{display:flex;gap:8px;}
+.feed-vis-btn{padding:7px 12px;border:1.5px solid #dde4ec;border-radius:20px;background:white;font-size:12px;color:#6b7e94;cursor:pointer;font-family:inherit;transition:all .15s;}
+.feed-vis-btn.active{border-color:#0f2d52;background:#e8f0f9;color:#0f2d52;font-weight:500;}
+.feed-post-btn{padding:9px 20px;background:#0f2d52;color:white;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+.feed-post-btn:disabled{opacity:.4;cursor:not-allowed;}
+.feed-post-btn:not(:disabled):hover{background:#1a4a7a;}
+.feed-post{background:white;border-radius:14px;padding:16px;border:1.5px solid #dde4ec;display:flex;flex-direction:column;gap:12px;}
+.feed-post-header{display:flex;align-items:center;gap:10px;}
+.feed-post-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:white;flex-shrink:0;}
+.feed-post-auteur{font-size:14px;font-weight:600;color:#1a2332;}
+.feed-post-time{font-size:12px;color:#6b7e94;display:flex;align-items:center;gap:4px;}
+.feed-post-zone{color:#185fa5;}
+.feed-post-vis{font-size:11px;}
+.feed-post-texte{font-size:14px;color:#1a2332;line-height:1.6;margin:0;}
+.feed-post-actions{display:flex;gap:8px;border-top:1px solid #f0f3f7;padding-top:10px;}
+.feed-action{padding:7px 12px;background:none;border:none;font-size:13px;color:#6b7e94;cursor:pointer;border-radius:8px;font-family:inherit;transition:all .15s;}
+.feed-action:hover{background:#f4f6f9;}
+.feed-action.liked{color:#ef4444;}
