@@ -42,3 +42,5 @@
 .prof-logout{padding:13px;background:white;color:#ef4444;border:1.5px solid #fecaca;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;}
 .prof-logout:hover{background:#fef2f2;}
 @media(max-width:768px){.prof-row{grid-template-columns:1fr;}.prof-stats{grid-template-columns:repeat(2,1fr);}}
+.prof-content{overflow-y:auto;flex:1;}
+.prof-page{height:100%;display:flex;flex-direction:column;}
