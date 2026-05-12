@@ -1,0 +1,28 @@
+.city-input-wrap{position:relative;width:100%;}
+.city-input-field{display:flex;align-items:center;gap:8px;background:white;border:1.5px solid #dde4ec;border-radius:10px;padding:10px 12px;transition:border-color .15s;}
+.city-input-field:focus-within{border-color:#185fa5;box-shadow:0 0 0 3px rgba(24,95,165,.1);}
+.city-input-icon{font-size:14px;flex-shrink:0;width:16px;text-align:center;}
+.city-input{flex:1;background:none;border:none;outline:none;font-size:14px;color:#1a2332;font-family:inherit;min-width:0;}
+.city-input::placeholder{color:#b0bfcc;}
+.city-input.valid{color:#0f6e56;}
+.city-input-clear{background:none;border:none;color:#b0bfcc;cursor:pointer;font-size:14px;padding:0;flex-shrink:0;line-height:1;}
+.city-input-clear:hover{color:#6b7e94;}
+/* Suggestions */
+.city-suggestions{position:absolute;top:calc(100% + 4px);left:0;right:0;background:white;border:1.5px solid #dde4ec;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:200;overflow:hidden;max-height:280px;overflow-y:auto;}
+.city-suggestion{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .12s;}
+.city-suggestion:hover{background:#f4f6f9;}
+.city-suggestion.port{border-left:2px solid #185fa5;}
+.city-suggestion.ville{border-left:2px solid #dde4ec;}
+.city-sug-icon{font-size:14px;flex-shrink:0;}
+.city-sug-label{flex:1;font-size:14px;color:#1a2332;}
+.city-sug-type{font-size:10px;color:#b0bfcc;background:#f4f6f9;padding:2px 6px;border-radius:6px;flex-shrink:0;}
+.city-suggestion.port .city-sug-type{background:#e8f0f9;color:#185fa5;}
+
+/* Variante dark (sur fond navy comme la barre de recherche) */
+.city-input-wrap.dark .city-input-field{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.2);}
+.city-input-wrap.dark .city-input-field:focus-within{border-color:rgba(255,255,255,.6);box-shadow:none;}
+.city-input-wrap.dark .city-input{color:white;}
+.city-input-wrap.dark .city-input::placeholder{color:rgba(255,255,255,.5);}
+.city-input-wrap.dark .city-input-icon{color:rgba(255,255,255,.7);}
+.city-input-wrap.dark .city-input-clear{color:rgba(255,255,255,.5);}
+.city-input-wrap.dark .city-input-clear:hover{color:white;}
