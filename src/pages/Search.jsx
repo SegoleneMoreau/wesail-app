@@ -62,7 +62,7 @@ export default function Search() {
       .then(({ data }) => {
         if (data && data.length > 0) {
           const formatted = data.map(t => ({
-            id: 't' + t.id,
+            id: t.id,
             cat: t.categorie || 'traversee',
             titre: t.titre,
             dep: t.depart,
@@ -216,7 +216,7 @@ let src = tab === 't' ? trips : tab === 'v' ? MOCK_VOYAGEURS : MOCK_CONVOYEURS
             ) : (
               <div className="results-grid">
                 {tab === 't' && filtered.map(t => (
-                  <div key={t.id} className="trip-card" onClick={() => navigate(`/trip/${t.id.replace('t', '')}`)}>
+                  <div key={t.id} className="trip-card" onClick={() => navigate(`/trip/${t.id}`)}>
                     <div className="trip-card-head">
                       <div className="trip-card-title">{t.titre}</div>
                       <div className="trip-card-price">{t.prix} €<span>/pers.</span></div>

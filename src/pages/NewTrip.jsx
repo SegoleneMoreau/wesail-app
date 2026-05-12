@@ -115,7 +115,11 @@ export default function NewTrip() {
   }
 
   const { error } = await supabase.from('trips').insert(tripData)
-  if (error) { console.error(error); return }
+if (error) {
+  console.error(error)
+  alert('Erreur : ' + error.message)
+  return
+}
 
   setSubmitted(true)
   setTimeout(() => navigate('/trajets'), 2000)
