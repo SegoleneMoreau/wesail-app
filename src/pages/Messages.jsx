@@ -1,14 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import './Messages.css'
 
-// Détection numéros de téléphone
 function hasPhone(txt) {
   const clean = txt.replace(/[\s.\-()]/g, '')
   if (/(?:\+|00)\d{7,15}/.test(clean)) return true
   if (/0[67]\d{8}/.test(clean)) return true
   if (/\d{10}/.test(clean)) return true
-  if (/\b\d[\d\s.\-]{8,}\d\b/.test(txt)) return true
   return false
 }
 
@@ -16,110 +15,55 @@ function nowTime() {
   return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 }
 
-const REPLIES = [
-  'Ok, parfait !', 'Merci pour les informations.', 'Super, ça me convient.',
-  'À très bientôt ⛵', 'Entendu, je prends note.', 'Très bien, je confirme.',
-]
-
-const MOCK_CONVS = [
-  {
-    id: 1, type: 'resa', unread: 2, nom: 'Thomas Leroy', av: 'TL', avc: '#185fa5',
-    online: true, preview: 'Super, je valide votre demande !', time: '14h32',
-    role: 'equipier', blocked: false, reported: false,
-    annonce: { titre: 'Marseille → Porto-Vecchio', date: '14 juin 2026', prix: '159 €/pers.' },
-    resaStatus: 'accepted', paye: false,
-    msgs: [
-      { id: 1, from: 'other', txt: 'Bonjour ! Je suis intéressé par votre trajet Marseille → Porto-Vecchio le 14 juin.', time: '09h12' },
-      { id: 2, from: 'me', txt: 'Bonjour Thomas ! Oui bien sûr, j\'ai encore 2 places disponibles. Quel est votre niveau de navigation ?', time: '09h45' },
-      { id: 3, from: 'other', txt: 'Niveau 2, j\'ai fait quelques régates et des traversées côtières. Très motivé !', time: '10h02' },
-      { id: 4, from: 'me', txt: 'Parfait, ça correspond bien. Je vous envoie la demande de réservation.', time: '10h15' },
-      { id: 5, from: 'other', txt: 'Super, je valide votre demande !', time: '14h32' },
-    ]
-  },
-  {
-    id: 2, type: 'resa', unread: 0, nom: 'Claire Dubois', av: 'CD', avc: '#7c3aed',
-    online: false, preview: 'Quand est-ce que vous confirmez ?', time: 'hier',
-    role: 'skipper', blocked: false, reported: false,
-    annonce: { titre: 'Brest → Saint-Malo', date: '20 juin 2026', prix: '89 €/pers.' },
-    resaStatus: 'pending', paye: false,
-    msgs: [
-      { id: 1, from: 'other', txt: 'Bonjour ! Je souhaite rejoindre votre trajet Brest → Saint-Malo.', time: 'hier 10h' },
-      { id: 2, from: 'other', txt: 'Quand est-ce que vous confirmez ?', time: 'hier 11h' },
-    ]
-  },
-  {
-    id: 3, type: 'libre', unread: 0, nom: 'Pierre Bernard', av: 'PB', avc: '#0891b2',
-    online: false, preview: 'Merci pour les infos sur l\'escale !', time: 'lun',
-    role: 'skipper', blocked: false, reported: false,
-    annonce: null, resaStatus: null, paye: false,
-    msgs: [
-      { id: 1, from: 'other', txt: 'Quelques infos sur l\'escale à Bonifacio ?', time: 'lun 09h' },
-      { id: 2, from: 'me', txt: 'On s\'arrête environ 4h, temps de visiter la citadelle.', time: 'lun 09h30' },
-      { id: 3, from: 'other', txt: 'Merci pour les infos sur l\'escale !', time: 'lun 10h' },
-    ]
-  },
-  {
-    id: 4, type: 'resa', unread: 0, nom: 'Marie Moreau', av: 'MM', avc: '#d97706',
-    online: true, preview: 'Place confirmée ✓', time: 'dim',
-    role: 'equipier', blocked: false, reported: false,
-    annonce: { titre: 'La Rochelle → Île de Ré', date: '28 juin 2026', prix: '65 €/pers.' },
-    resaStatus: 'paid', paye: true,
-    msgs: [
-      { id: 1, from: 'other', txt: 'Bonjour, votre place est confirmée et payée !', time: 'dim 15h' },
-      { id: 2, from: 'me', txt: 'Merci ! À vendredi au port.', time: 'dim 15h30' },
-      { id: 3, from: 'other', txt: 'Place confirmée ✓', time: 'dim 16h' },
-    ]
-  },
-]
-
-function ResaBanner({ conv, onAccept, onRefuse }) {
-  if (!conv.annonce) return null
-  const isSk = conv.role === 'skipper'
-
+function ResaBanner({ booking, isSkipper, onAccept, onRefuse }) {
+  if (!booking) return null
   return (
     <div className="resa-banner">
       <div className="rb-title">⛵ Réservation</div>
       <div className="rb-annonce">
         <div className="rb-icon">⛵</div>
         <div>
-          <div className="rb-ann-title">{conv.annonce.titre}</div>
-          <div className="rb-ann-meta">{conv.annonce.date} · {conv.annonce.prix}</div>
+          <div className="rb-ann-title">{booking.trips?.titre || 'Trajet'}</div>
+          <div className="rb-ann-meta">
+            {booking.trips?.date_depart ? new Date(booking.trips.date_depart).toLocaleDateString('fr-FR') : '—'}
+            {booking.trips?.prix_par_personne ? ` · ${booking.trips.prix_par_personne} €/pers.` : ''}
+          </div>
         </div>
       </div>
       <div className="rb-status">
-        {conv.resaStatus === 'pending' && (
+        {booking.statut === 'en_attente' && (
           <>
             <span className="rs-pill rs-attente">⏳ En attente de confirmation</span>
-            {isSk ? (
+            {isSkipper ? (
               <div className="rb-actions">
-                <button className="rb-btn rb-accept" onClick={() => onAccept(conv.id)}>✓ Accepter</button>
-                <button className="rb-btn rb-refuse" onClick={() => onRefuse(conv.id)}>✕ Refuser</button>
+                <button className="rb-btn rb-accept" onClick={onAccept}>✓ Accepter</button>
+                <button className="rb-btn rb-refuse" onClick={onRefuse}>✕ Refuser</button>
               </div>
             ) : (
               <div className="rb-note">En attente de confirmation du skipper</div>
             )}
           </>
         )}
-        {conv.resaStatus === 'accepted' && !conv.paye && (
+        {booking.statut === 'accepte' && (
           <>
             <span className="rs-pill rs-ok">✓ Acceptée</span>
-            {!isSk ? (
-              <button className="rb-btn rb-pay">💳 Payer ma place ({conv.annonce.prix})</button>
+            {!isSkipper ? (
+              <button className="rb-btn rb-pay">💳 Payer ma place ({booking.trips?.prix_par_personne} €)</button>
             ) : (
               <div className="rb-note">En attente du paiement de l'équipier</div>
             )}
           </>
         )}
-        {conv.resaStatus === 'paid' && (
+        {booking.statut === 'paye' && (
           <>
             <span className="rs-pill rs-paye">💳 Payée — place confirmée</span>
             <div className="rb-contact">
-              <div className="rb-contact-title">📞 Coordonnées de contact</div>
-              <div className="rb-contact-phone">+33 6 12 34 56 78</div>
+              <div className="rb-contact-title">📞 Coordonnées partagées</div>
+              <div className="rb-contact-phone">Disponibles dans votre profil</div>
             </div>
           </>
         )}
-        {conv.resaStatus === 'refused' && (
+        {booking.statut === 'refuse' && (
           <span className="rs-pill rs-refuse">✕ Refusée</span>
         )}
       </div>
@@ -129,84 +73,175 @@ function ResaBanner({ conv, onAccept, onRefuse }) {
 
 export default function Messages() {
   const navigate = useNavigate()
-  const [convs, setConvs] = useState(MOCK_CONVS)
-  const [activeId, setActiveId] = useState(null)
-  const [tab, setTab] = useState('all')
+  const [currentUser, setCurrentUser] = useState(null)
+  const [convs, setConvs] = useState([])
+  const [activeConv, setActiveConv] = useState(null)
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [search, setSearch] = useState('')
+  const [tab, setTab] = useState('all')
   const [phoneWarning, setPhoneWarning] = useState(false)
+  const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef(null)
 
-  const activeConv = convs.find(c => c.id === activeId)
-
-  const filteredConvs = convs.filter(c => {
-    if (tab === 'resa' && c.type !== 'resa') return false
-    if (tab === 'libre' && c.type !== 'libre') return false
-    if (search && !c.nom.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUser(user)
+      if (user) loadConversations(user.id)
+    })
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [activeConv?.msgs])
+  }, [messages])
 
-  function openConv(id) {
-    setConvs(cs => cs.map(c => c.id === id ? { ...c, unread: 0 } : c))
-    setActiveId(id)
-    setPhoneWarning(false)
+  async function loadConversations(userId) {
+    setLoading(true)
+    const { data } = await supabase
+      .from('bookings')
+      .select(`
+        id, statut, montant, created_at,
+        trips:trip_id(id, titre, date_depart, prix_par_personne, skipper_id),
+        equip:equip_id(id, prenom, nom)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (data) {
+      const myBookings = data.filter(b =>
+        b.equip?.id === userId || b.trips?.skipper_id === userId
+      )
+
+      const formatted = await Promise.all(myBookings.map(async b => {
+        const isSkipper = b.trips?.skipper_id === userId
+        let otherUser = isSkipper ? b.equip : null
+
+        if (!isSkipper && b.trips?.skipper_id) {
+          const { data: sk } = await supabase
+            .from('users')
+            .select('id, prenom, nom')
+            .eq('id', b.trips.skipper_id)
+            .single()
+          if (sk) otherUser = sk
+        }
+
+        const { data: lastMsg } = await supabase
+          .from('messages')
+          .select('contenu, created_at')
+          .eq('booking_id', b.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('booking_id', b.id)
+          .eq('lu', false)
+          .neq('sender_id', userId)
+
+        return {
+          id: b.id,
+          booking: b,
+          isSkipper,
+          otherUser,
+          nom: otherUser ? `${otherUser.prenom} ${otherUser.nom}` : 'Utilisateur',
+          av: otherUser ? `${otherUser.prenom[0]}${otherUser.nom[0]}` : 'U',
+          avc: '#185fa5',
+          preview: lastMsg?.contenu || (b.statut === 'en_attente' ? 'Nouvelle demande de réservation' : 'Réservation'),
+          time: lastMsg?.created_at
+            ? new Date(lastMsg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+            : new Date(b.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          unread: count || 0,
+          type: 'resa',
+        }
+      }))
+      setConvs(formatted)
+    }
+    setLoading(false)
   }
 
-  function sendMessage() {
-    if (!input.trim() || !activeConv) return
+  async function openConv(conv) {
+    setActiveConv(conv)
+    await supabase.from('messages')
+      .update({ lu: true })
+      .eq('booking_id', conv.id)
+      .neq('sender_id', currentUser.id)
+
+    const { data } = await supabase
+      .from('messages')
+      .select('*, sender:sender_id(prenom, nom)')
+      .eq('booking_id', conv.id)
+      .order('created_at', { ascending: true })
+
+    if (data) {
+      setMessages(data.map(m => ({
+        id: m.id,
+        from: m.sender_id === currentUser.id ? 'me' : 'other',
+        txt: m.contenu,
+        time: new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        av: m.sender ? `${m.sender.prenom[0]}${m.sender.nom[0]}` : 'U',
+      })))
+    }
+    setConvs(cs => cs.map(c => c.id === conv.id ? { ...c, unread: 0 } : c))
+  }
+
+  async function sendMessage() {
+    if (!input.trim() || !activeConv || !currentUser) return
     if (hasPhone(input)) {
       setPhoneWarning(true)
       setTimeout(() => setPhoneWarning(false), 3000)
       return
     }
-    const newMsg = { id: Date.now(), from: 'me', txt: input, time: nowTime() }
-    setConvs(cs => cs.map(c => c.id === activeId
-      ? { ...c, msgs: [...c.msgs, newMsg], preview: input }
-      : c
-    ))
-    setInput('')
-    // Réponse simulée
-    if (Math.random() > 0.5) {
-      setTimeout(() => {
-        const reply = { id: Date.now() + 1, from: 'other', txt: REPLIES[Math.floor(Math.random() * REPLIES.length)], time: nowTime() }
-        setConvs(cs => cs.map(c => c.id === activeId ? { ...c, msgs: [...c.msgs, reply] } : c))
-      }, 1500 + Math.random() * 1000)
+
+    const { data, error } = await supabase.from('messages').insert({
+      booking_id: activeConv.id,
+      sender_id: currentUser.id,
+      contenu: input,
+    }).select().single()
+
+    if (error) { console.error(error); return }
+
+    const newMsg = {
+      id: data.id,
+      from: 'me',
+      txt: input,
+      time: nowTime(),
+      av: currentUser?.email?.[0]?.toUpperCase() || 'M',
     }
+    setMessages(ms => [...ms, newMsg])
+    setConvs(cs => cs.map(c => c.id === activeConv.id ? { ...c, preview: input } : c))
+    setInput('')
   }
 
-  function acceptResa(id) {
-    setConvs(cs => cs.map(c => c.id === id ? { ...c, resaStatus: 'accepted' } : c))
+  async function handleAccept() {
+    await supabase.from('bookings').update({ statut: 'accepte' }).eq('id', activeConv.id)
+    const updated = { ...activeConv, booking: { ...activeConv.booking, statut: 'accepte' } }
+    setActiveConv(updated)
+    setConvs(cs => cs.map(c => c.id === activeConv.id ? updated : c))
   }
 
-  function refuseResa(id) {
-    setConvs(cs => cs.map(c => c.id === id ? { ...c, resaStatus: 'refused' } : c))
+  async function handleRefuse() {
+    await supabase.from('bookings').update({ statut: 'refuse' }).eq('id', activeConv.id)
+    const updated = { ...activeConv, booking: { ...activeConv.booking, statut: 'refuse' } }
+    setActiveConv(updated)
+    setConvs(cs => cs.map(c => c.id === activeConv.id ? updated : c))
   }
 
-  const statut = c => {
-    if (!c.annonce) return null
-    if (c.resaStatus === 'pending') return <span className="ci-badge badge-attente">En attente</span>
-    if (c.resaStatus === 'accepted') return <span className="ci-badge badge-ok">Acceptée</span>
-    if (c.resaStatus === 'paid') return <span className="ci-badge badge-paye">Payé</span>
-    if (c.resaStatus === 'refused') return <span className="ci-badge badge-refuse">Refusée</span>
-    return null
-  }
+  const filteredConvs = convs.filter(c => {
+    if (tab === 'resa') return c.type === 'resa'
+    if (tab === 'libre') return c.type === 'libre'
+    return true
+  })
 
   return (
     <div className="msg-page">
       <div className="msg-header">
-        <button className="msg-back" onClick={() => activeConv ? setActiveId(null) : navigate('/')}>←</button>
+        <button className="msg-back" onClick={() => activeConv ? setActiveConv(null) : navigate('/')}>←</button>
         <span className="msg-header-title">{activeConv ? activeConv.nom : 'Messages'}</span>
-        {activeConv && <span className="msg-header-sub">{activeConv.annonce?.titre || 'Message libre'}</span>}
+        {activeConv && <span className="msg-header-sub">{activeConv.booking?.trips?.titre || ''}</span>}
       </div>
 
       <div className="msg-layout">
-        {/* Liste conversations */}
         <div className={`msg-list ${activeConv ? 'mobile-hidden' : ''}`}>
-          {/* Tabs */}
           <div className="msg-tabs">
             <button className={`msg-tab ${tab === 'all' ? 'active' : ''}`} onClick={() => setTab('all')}>
               Tous <span className="msg-tab-cnt">{convs.length}</span>
@@ -215,21 +250,28 @@ export default function Messages() {
               Réservations <span className="msg-tab-cnt">{convs.filter(c => c.type === 'resa').length}</span>
             </button>
             <button className={`msg-tab ${tab === 'libre' ? 'active' : ''}`} onClick={() => setTab('libre')}>
-              Libres <span className="msg-tab-cnt">{convs.filter(c => c.type === 'libre').length}</span>
+              Libres <span className="msg-tab-cnt">0</span>
             </button>
           </div>
 
-          {/* Recherche */}
-          <div className="msg-search-wrap">
-            <input className="msg-search" placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+          {loading && <div className="msg-loading">Chargement...</div>}
 
-          {/* Conversations */}
+          {!loading && filteredConvs.length === 0 && (
+            <div className="msg-empty-list">
+              <div style={{ fontSize: 40, textAlign: 'center', padding: '40px 20px' }}>💬</div>
+              <p style={{ textAlign: 'center', color: '#6b7e94', fontSize: 14 }}>Aucune conversation</p>
+              <p style={{ textAlign: 'center', fontSize: 12, color: '#b0bfcc', padding: '0 20px' }}>
+                Vos réservations apparaîtront ici
+              </p>
+            </div>
+          )}
+
           {filteredConvs.map(c => (
-            <div key={c.id} className={`msg-conv ${activeId === c.id ? 'active' : ''} ${c.unread ? 'unread' : ''}`} onClick={() => openConv(c.id)}>
+            <div key={c.id}
+              className={`msg-conv ${activeConv?.id === c.id ? 'active' : ''} ${c.unread ? 'unread' : ''}`}
+              onClick={() => openConv(c)}>
               <div className="msg-av-wrap">
                 <div className="msg-av" style={{ background: c.avc }}>{c.av}</div>
-                {c.online && <div className="msg-online"></div>}
               </div>
               <div className="msg-conv-body">
                 <div className="msg-conv-top">
@@ -237,14 +279,18 @@ export default function Messages() {
                   <span className="msg-conv-time">{c.time}</span>
                 </div>
                 <div className="msg-conv-last">{c.preview}</div>
-                {statut(c)}
+                <span className={`ci-badge badge-${c.booking?.statut === 'en_attente' ? 'attente' : c.booking?.statut === 'accepte' ? 'ok' : c.booking?.statut === 'paye' ? 'paye' : 'refuse'}`}>
+                  {c.booking?.statut === 'en_attente' ? 'En attente'
+                    : c.booking?.statut === 'accepte' ? 'Acceptée'
+                    : c.booking?.statut === 'paye' ? 'Payé'
+                    : c.booking?.statut === 'refuse' ? 'Refusée' : ''}
+                </span>
               </div>
               {c.unread > 0 && <div className="msg-badge">{c.unread}</div>}
             </div>
           ))}
         </div>
 
-        {/* Zone chat */}
         <div className={`msg-chat ${!activeConv ? 'mobile-hidden' : ''}`}>
           {!activeConv ? (
             <div className="msg-empty">
@@ -253,52 +299,48 @@ export default function Messages() {
             </div>
           ) : (
             <>
-              {/* Banner réservation */}
-              <ResaBanner conv={activeConv} onAccept={acceptResa} onRefuse={refuseResa} />
+              <ResaBanner
+                booking={activeConv.booking}
+                isSkipper={activeConv.isSkipper}
+                onAccept={handleAccept}
+                onRefuse={handleRefuse}
+              />
 
-              {/* Alerte téléphone */}
               {phoneWarning && (
                 <div className="msg-phone-warning">
-                  ⛔ Coordonnées non autorisées — Elles seront partagées automatiquement après réservation et paiement
+                  ⛔ Coordonnées non autorisées — Elles seront partagées après réservation et paiement
                 </div>
               )}
 
-              {/* Messages */}
               <div className="msg-messages">
-                {activeConv.blocked ? (
-                  <div className="msg-locked">🔒 Vous avez bloqué cet utilisateur.</div>
-                ) : activeConv.reported ? (
-                  <div className="msg-locked">⚠️ Conversation suspendue — signalement en cours d'examen.</div>
-                ) : (
-                  activeConv.msgs.map(m => (
-                    <div key={m.id} className={`msg-bubble-wrap ${m.from === 'me' ? 'mine' : ''}`}>
-                      {m.from !== 'me' && (
-                        <div className="msg-bubble-av" style={{ background: activeConv.avc }}>{activeConv.av}</div>
-                      )}
-                      <div className={`msg-bubble ${m.from === 'me' ? 'mine' : ''}`}>
-                        <p>{m.txt}</p>
-                        <span className="msg-time">{m.time}</span>
-                      </div>
-                    </div>
-                  ))
+                {messages.length === 0 && (
+                  <div className="msg-no-messages">Démarrez la conversation !</div>
                 )}
+                {messages.map(m => (
+                  <div key={m.id} className={`msg-bubble-wrap ${m.from === 'me' ? 'mine' : ''}`}>
+                    {m.from !== 'me' && (
+                      <div className="msg-bubble-av" style={{ background: activeConv.avc }}>{activeConv.av}</div>
+                    )}
+                    <div className={`msg-bubble ${m.from === 'me' ? 'mine' : ''}`}>
+                      <p>{m.txt}</p>
+                      <span className="msg-time">{m.time}</span>
+                    </div>
+                  </div>
+                ))}
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input */}
-              {!activeConv.blocked && !activeConv.reported && (
-                <div className="msg-input-wrap">
-                  <textarea
-                    className={`msg-input ${phoneWarning ? 'phone-error' : ''}`}
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                    placeholder="Votre message..."
-                    rows={1}
-                  />
-                  <button className="msg-send" onClick={sendMessage}>→</button>
-                </div>
-              )}
+              <div className="msg-input-wrap">
+                <textarea
+                  className={`msg-input ${phoneWarning ? 'phone-error' : ''}`}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                  placeholder="Votre message..."
+                  rows={1}
+                />
+                <button className="msg-send" onClick={sendMessage}>→</button>
+              </div>
             </>
           )}
         </div>
