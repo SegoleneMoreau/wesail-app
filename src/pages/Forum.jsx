@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 import './Forum.css'
 
 const CATS = [
@@ -12,63 +12,72 @@ const CATS = [
   { id: 'destinations', label: 'Destinations', color: '#0891b2' },
 ]
 
-const MOCK_POSTS = [
-  {
-    id: 1, cat: 'meteo', auteur: 'Thomas L.', av: 'TL', avc: '#185fa5', time: 'il y a 2h',
-    titre: 'Conditions en Méditerranée cet été ?', hot: true, epingle: true,
-    texte: 'Bonjour à tous ! Quelqu\'un a des infos sur les conditions prévues cet été en Méditerranée occidentale ? Je prévois une traversée Marseille-Corse fin juin.',
-    likes: 24, liked: false, views: 234,
-    comments: [
-      { id: 1, av: 'CD', avc: '#993556', auteur: 'Claire D.', time: 'il y a 1h', texte: 'Généralement calme en juin avant le mistral de juillet. Partez tôt le matin !', likes: 5, liked: false },
-      { id: 2, av: 'PB', avc: '#0f6e56', auteur: 'Pierre B.', time: 'il y a 45min', texte: 'Je confirme, juin c\'est idéal. Météo plus stable qu\'en juillet/août.' },
-    ],
-    showComments: false, reported: false
-  },
-  {
-    id: 2, cat: 'recits', auteur: 'Claire D.', av: 'CD', avc: '#993556', time: 'il y a 5h',
-    titre: 'Mon tour de Corse en 10 jours', hot: false, epingle: false,
-    texte: 'Retour de croisière ! 10 jours autour de la Corse avec un équipage de 4. On a fait Marseille, Ajaccio, Bonifacio, Porto-Vecchio, Bastia et retour. Un voyage inoubliable !',
-    likes: 41, liked: true, views: 156,
-    comments: [
-      { id: 1, av: 'TL', avc: '#185fa5', auteur: 'Thomas L.', time: 'il y a 3h', texte: 'Superbe récit ! Quelle météo vous avez eu ?' },
-    ],
-    showComments: false, reported: false
-  },
-  {
-    id: 3, cat: 'entraide', auteur: 'Pierre B.', av: 'PB', avc: '#0f6e56', time: 'hier',
-    titre: 'Conseils pour première traversée Marseille-Corse', hot: true, epingle: false,
-    texte: 'Je prépare ma première grande traversée. Des conseils sur les points de passage, les risques météo, l\'équipement indispensable ?',
-    likes: 67, liked: false, views: 445,
-    comments: [],
-    showComments: false, reported: false
-  },
-  {
-    id: 4, cat: 'materiel', auteur: 'Marie M.', av: 'MM', avc: '#d97706', time: 'hier',
-    titre: 'Comparatif GPS marins 2026', hot: false, epingle: false,
-    texte: 'J\'ai testé les 3 principaux GPS du marché. Voici mon comparatif détaillé après 6 mois d\'utilisation...',
-    likes: 33, liked: false, views: 89,
-    comments: [],
-    showComments: false, reported: false
-  },
-  {
-    id: 5, cat: 'destinations', auteur: 'Lucas S.', av: 'LS', avc: '#0891b2', time: 'il y a 2j',
-    titre: 'Les plus beaux mouillages de Bretagne', hot: true, epingle: false,
-    texte: 'Après 3 étés à naviguer en Bretagne, voici ma sélection des 10 plus beaux mouillages. De Ouessant aux Glénan en passant par Belle-Île...',
-    likes: 89, liked: false, views: 678,
-    comments: [],
-    showComments: false, reported: false
-  },
-]
-
 export default function Forum() {
-  const [posts, setPosts] = useState(MOCK_POSTS)
+  const [posts, setPosts] = useState([])
   const [curCat, setCurCat] = useState('all')
   const [showNew, setShowNew] = useState(false)
   const [newPost, setNewPost] = useState({ titre: '', cat: 'meteo', texte: '' })
   const [commentInputs, setCommentInputs] = useState({})
-  const [reportId, setReportId] = useState(null)
+  const [expandedComments, setExpandedComments] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
 
-  const filtered = curCat === 'all' ? posts : posts.filter(p => p.cat === curCat)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserId(user.id)
+        supabase.from('users').select('prenom, nom').eq('id', user.id).single()
+          .then(({ data }) => setUserProfile(data))
+      }
+    })
+    loadPosts()
+  }, [])
+
+  async function loadPosts() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('forum_posts')
+      .select('*, auteur:auteur_id(prenom, nom), forum_comments(id, contenu, created_at, auteur:auteur_id(prenom, nom))')
+      .order('created_at', { ascending: false })
+    if (data) setPosts(data.map(p => ({ ...p, liked: false, likes: 0, showComments: false })))
+    setLoading(false)
+  }
+
+  async function publishPost() {
+    if (!newPost.titre || !newPost.texte || !userId) return
+    const { data } = await supabase.from('forum_posts').insert({
+      auteur_id: userId,
+      categorie: newPost.cat,
+      titre: newPost.titre,
+      contenu: newPost.texte,
+    }).select('*, auteur:auteur_id(prenom, nom), forum_comments(id)').single()
+    if (data) setPosts(ps => [{ ...data, liked: false, likes: 0, showComments: false }, ...ps])
+    setNewPost({ titre: '', cat: 'meteo', texte: '' })
+    setShowNew(false)
+  }
+
+  async function deletePost(id) {
+    await supabase.from('forum_posts').delete().eq('id', id)
+    setPosts(ps => ps.filter(p => p.id !== id))
+  }
+
+  async function sendComment(postId) {
+    const txt = (commentInputs[postId] || '').trim()
+    if (!txt || !userId) return
+    const { data } = await supabase.from('forum_comments').insert({
+      post_id: postId,
+      auteur_id: userId,
+      contenu: txt,
+    }).select('*, auteur:auteur_id(prenom, nom)').single()
+    if (data) {
+      setPosts(ps => ps.map(p => p.id === postId
+        ? { ...p, forum_comments: [...(p.forum_comments || []), data] }
+        : p
+      ))
+    }
+    setCommentInputs(ci => ({ ...ci, [postId]: '' }))
+  }
 
   function toggleLike(id) {
     setPosts(ps => ps.map(p => p.id === id
@@ -78,49 +87,12 @@ export default function Forum() {
   }
 
   function toggleComments(id) {
-    setPosts(ps => ps.map(p => p.id === id ? { ...p, showComments: !p.showComments } : p))
+    setExpandedComments(ec => ({ ...ec, [id]: !ec[id] }))
   }
 
-  function sendComment(postId) {
-    const txt = (commentInputs[postId] || '').trim()
-    if (!txt) return
-    const newComment = { id: Date.now(), av: 'SM', avc: '#0f2d52', auteur: 'Moi', time: 'à l\'instant', texte: txt }
-    setPosts(ps => ps.map(p => p.id === postId ? { ...p, comments: [...p.comments, newComment] } : p))
-    setCommentInputs(ci => ({ ...ci, [postId]: '' }))
-  }
-
-  function publishPost() {
-    if (!newPost.titre || !newPost.texte) return
-    const post = {
-      id: Date.now(), cat: newPost.cat, auteur: 'Moi', av: 'SM', avc: '#0f2d52',
-      time: 'à l\'instant', titre: newPost.titre, hot: false, epingle: false,
-      texte: newPost.texte, likes: 0, liked: false, views: 1,
-      comments: [], showComments: false, reported: false
-    }
-    setPosts(ps => [post, ...ps])
-    setNewPost({ titre: '', cat: 'meteo', texte: '' })
-    setShowNew(false)
-  }
-
-  function reportPost(id) {
-    setPosts(ps => ps.map(p => p.id === id ? { ...p, reported: true } : p))
-    setReportId(null)
-  }
-
-  function deletePost(id) {
-    setPosts(ps => ps.filter(p => p.id !== id))
-  }
-
-  function likeComment(postId, commentId) {
-    setPosts(ps => ps.map(p => p.id === postId ? {
-      ...p, comments: p.comments.map(c => c.id === commentId
-        ? { ...c, liked: !c.liked, likes: (c.likes || 0) + (c.liked ? -1 : 1) }
-        : c)
-    } : p))
-  }
-
-  const catLabel = id => CATS.find(c => c.id === id)?.label || id
+  const filtered = curCat === 'all' ? posts : posts.filter(p => p.categorie === curCat)
   const catColor = id => CATS.find(c => c.id === id)?.color || '#6b7e94'
+  const catLabel = id => CATS.find(c => c.id === id)?.label || id
 
   return (
     <div className="forum-page">
@@ -130,7 +102,6 @@ export default function Forum() {
       </div>
 
       <div className="forum-content">
-        {/* Catégories */}
         <div className="forum-cats">
           {CATS.map(c => (
             <button key={c.id}
@@ -143,82 +114,81 @@ export default function Forum() {
           ))}
         </div>
 
-        {/* Posts */}
-        {filtered.length === 0 && (
-          <div className="forum-empty">Aucun post dans cette catégorie.</div>
-        )}
+        {loading && <div className="forum-empty">Chargement...</div>}
+        {!loading && filtered.length === 0 && <div className="forum-empty">Aucun post dans cette catégorie.</div>}
 
-        {filtered.map(p => (
-          <div key={p.id} className={`forum-post-card ${p.reported ? 'reported' : ''}`}>
-            {/* Header post */}
-            <div className="fpc-header">
-              <div className="fpc-av" style={{ background: p.avc }}>{p.av}</div>
-              <div className="fpc-meta">
-                <div className="fpc-auteur">{p.auteur}</div>
-                <div className="fpc-time">{p.time}</div>
+        {filtered.map(p => {
+          const auteurNom = p.auteur ? `${p.auteur.prenom} ${p.auteur.nom}` : 'Utilisateur'
+          const auteurAv = p.auteur ? `${p.auteur.prenom[0]}${p.auteur.nom[0]}` : 'U'
+          const isMyPost = p.auteur_id === userId
+          const timeAff = new Date(p.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+          const showCmts = expandedComments[p.id]
+
+          return (
+            <div key={p.id} className="forum-post-card">
+              <div className="fpc-header">
+                <div className="fpc-av" style={{ background: '#185fa5' }}>{auteurAv}</div>
+                <div className="fpc-meta">
+                  <div className="fpc-auteur">{auteurNom}</div>
+                  <div className="fpc-time">{timeAff}</div>
+                </div>
+                <span className="fpc-cat" style={{ background: catColor(p.categorie) + '22', color: catColor(p.categorie) }}>
+                  {catLabel(p.categorie)}
+                </span>
+                {p.epingle && <span className="fpc-epingle">📌</span>}
               </div>
-              <span className="fpc-cat" style={{ background: catColor(p.cat) + '22', color: catColor(p.cat) }}>
-                {catLabel(p.cat)}
-              </span>
-              {p.hot && <span className="fpc-hot">🔥</span>}
-              {p.epingle && <span className="fpc-epingle">📌</span>}
-            </div>
 
-            {/* Titre + texte */}
-            <div className="fpc-titre">{p.titre}</div>
-            <div className="fpc-texte">{p.texte}</div>
+              <div className="fpc-titre">{p.titre}</div>
+              <div className="fpc-texte">{p.contenu}</div>
 
-            {/* Actions */}
-            <div className="fpc-actions">
-              <button className={`fpc-action ${p.liked ? 'liked' : ''}`} onClick={() => toggleLike(p.id)}>
-                {p.liked ? '❤️' : '🤍'} {p.likes}
-              </button>
-              <button className="fpc-action" onClick={() => toggleComments(p.id)}>
-                💬 {p.comments.length}
-              </button>
-              <button className="fpc-action">↗️ Partager</button>
-              <span className="fpc-views">{p.views} vues</span>
-              {p.auteur === 'Moi' ? (
-                <button className="fpc-action delete" onClick={() => deletePost(p.id)}>🗑 Supprimer</button>
-              ) : !p.reported ? (
-                <button className="fpc-action report" onClick={() => setReportId(p.id)}>⚑ Signaler</button>
-              ) : (
-                <span className="fpc-reported">Signalé</span>
+              <div className="fpc-actions">
+                <button className={`fpc-action ${p.liked ? 'liked' : ''}`} onClick={() => toggleLike(p.id)}>
+                  {p.liked ? '❤️' : '🤍'} {p.likes}
+                </button>
+                <button className="fpc-action" onClick={() => toggleComments(p.id)}>
+                  💬 {p.forum_comments?.length || 0}
+                </button>
+                <button className="fpc-action">↗️ Partager</button>
+                <span className="fpc-views">{p.vues || 0} vues</span>
+                {isMyPost && (
+                  <button className="fpc-action delete" onClick={() => deletePost(p.id)}>🗑 Supprimer</button>
+                )}
+              </div>
+
+              {showCmts && (
+                <div className="fpc-comments">
+                  {(p.forum_comments || []).map(c => {
+                    const cAv = c.auteur ? `${c.auteur.prenom[0]}${c.auteur.nom[0]}` : 'U'
+                    const cNom = c.auteur ? `${c.auteur.prenom} ${c.auteur.nom}` : 'Utilisateur'
+                    return (
+                      <div key={c.id} className="fpc-comment">
+                        <div className="fpc-cmt-av" style={{ background: '#185fa5' }}>{cAv}</div>
+                        <div className="fpc-cmt-body">
+                          <div className="fpc-cmt-auteur">{cNom}
+                            <span className="fpc-cmt-time"> · {new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
+                          </div>
+                          <div className="fpc-cmt-texte">{c.contenu}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div className="fpc-cmt-input-wrap">
+                    <input
+                      className="fpc-cmt-input"
+                      placeholder="Votre commentaire..."
+                      value={commentInputs[p.id] || ''}
+                      onChange={e => setCommentInputs(ci => ({ ...ci, [p.id]: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && sendComment(p.id)}
+                    />
+                    <button className="fpc-cmt-send" onClick={() => sendComment(p.id)}>→</button>
+                  </div>
+                </div>
               )}
             </div>
-
-            {/* Commentaires */}
-            {p.showComments && (
-              <div className="fpc-comments">
-                {p.comments.map(c => (
-                  <div key={c.id} className="fpc-comment">
-                    <div className="fpc-cmt-av" style={{ background: c.avc }}>{c.av}</div>
-                    <div className="fpc-cmt-body">
-                      <div className="fpc-cmt-auteur">{c.auteur} <span className="fpc-cmt-time">{c.time}</span></div>
-                      <div className="fpc-cmt-texte">{c.texte}</div>
-                      <button className={`fpc-cmt-like ${c.liked ? 'liked' : ''}`} onClick={() => likeComment(p.id, c.id)}>
-                        {c.liked ? '❤️' : '🤍'} {c.likes || 0}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <div className="fpc-cmt-input-wrap">
-                  <input
-                    className="fpc-cmt-input"
-                    placeholder="Votre commentaire..."
-                    value={commentInputs[p.id] || ''}
-                    onChange={e => setCommentInputs(ci => ({ ...ci, [p.id]: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && sendComment(p.id)}
-                  />
-                  <button className="fpc-cmt-send" onClick={() => sendComment(p.id)}>→</button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      {/* Modal nouveau post */}
       {showNew && (
         <div className="forum-modal-overlay" onClick={() => setShowNew(false)}>
           <div className="forum-modal" onClick={e => e.stopPropagation()}>
@@ -240,20 +210,6 @@ export default function Forum() {
             <div className="forum-modal-btns">
               <button className="forum-modal-cancel" onClick={() => setShowNew(false)}>Annuler</button>
               <button className="forum-modal-send" disabled={!newPost.titre || !newPost.texte} onClick={publishPost}>Publier</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal signalement */}
-      {reportId && (
-        <div className="forum-modal-overlay" onClick={() => setReportId(null)}>
-          <div className="forum-modal" onClick={e => e.stopPropagation()}>
-            <div className="forum-modal-title">Signaler ce post</div>
-            <p style={{ fontSize: 14, color: '#6b7e94', marginBottom: 16 }}>Ce post sera examiné par notre équipe de modération.</p>
-            <div className="forum-modal-btns">
-              <button className="forum-modal-cancel" onClick={() => setReportId(null)}>Annuler</button>
-              <button className="forum-modal-send" style={{ background: '#ef4444' }} onClick={() => reportPost(reportId)}>Signaler</button>
             </div>
           </div>
         </div>
