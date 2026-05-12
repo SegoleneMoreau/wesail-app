@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CityInput from '../components/CityInput'
 import './Search.css'
+import { supabase } from '../lib/supabase'
+import { useState, useEffect } from 'react'
 
 const ZONES = [
   { n: 'Méditerranée', s: '247 annonces', hot: true },
@@ -51,12 +53,48 @@ export default function Search() {
   const [arr, setArr] = useState('')
   const [date, setDate] = useState('')
   const [searched, setSearched] = useState(false)
+  const [realTrips, setRealTrips] = useState([])
+
+  useEffect(() => {
+    supabase.from('trips')
+      .select('*, users:skipper_id(prenom, nom)')
+      .eq('statut', 'actif')
+      .order('date_depart', { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const formatted = data.map(t => ({
+            id: 't' + t.id,
+            cat: t.categorie || 'traversee',
+            titre: t.titre,
+            dep: t.depart,
+            arr: t.arrivee,
+            ports: [t.depart, t.arrivee],
+            date: t.date_depart?.slice(0, 10),
+            dateAff: t.date_depart ? new Date(t.date_depart).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—',
+            duree: '—',
+            bateau: '—',
+            skipper: t.users ? `${t.users.prenom} ${t.users.nom[0]}.` : 'Skipper',
+            av: t.users ? `${t.users.prenom[0]}${t.users.nom[0]}` : 'SK',
+            avc: '#185fa5',
+            rating: null,
+            nb: 0,
+            prix: t.prix_par_personne,
+            places: `${t.places_dispo} place${t.places_dispo > 1 ? 's' : ''} libre${t.places_dispo > 1 ? 's' : ''}`,
+            ok: t.places_dispo > 0,
+            ow: t.only_women,
+            niv: t.niveau_requis,
+          }))
+          setRealTrips(formatted)
+        }
+      })
+  }, [])
 
   function doSearch() { setSearched(true) }
   function clearSearch() { setDep(''); setArr(''); setDate(''); setSearched(false); setFilter('all') }
 
   function getFiltered() {
-    let src = tab === 't' ? MOCK_TRIPS : tab === 'v' ? MOCK_VOYAGEURS : MOCK_CONVOYEURS
+    const trips = realTrips.length > 0 ? realTrips : MOCK_TRIPS
+let src = tab === 't' ? trips : tab === 'v' ? MOCK_VOYAGEURS : MOCK_CONVOYEURS
     return src.filter(a => {
       if (filter === 'places' && !a.ok) return false
       if (filter === 'ow' && !a.ow) return false
