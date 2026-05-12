@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import CityInput from '../components/CityInput'
 import './NewTrip.css'
 
@@ -94,10 +95,31 @@ export default function NewTrip() {
   const nbPersonnes = parseInt(f1.places) + 1
   const prixPP = f1.gratuit ? 0 : (totalFrais > 0 ? Math.ceil(totalFrais / nbPersonnes) : '')
 
-  function handleSubmit() {
-    setSubmitted(true)
-    setTimeout(() => navigate('/trajets'), 2000)
+  async function handleSubmit() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const tripData = {
+    skipper_id: user.id,
+    titre: type === 1 ? `${f1.depart} → ${f1.arrivee}` : type === 2 ? f2.eq_description.slice(0, 50) : `${f3.depart} → ${f3.arrivee}`,
+    depart: type === 1 ? f1.depart : type === 2 ? f2.eq_depart : f3.depart,
+    arrivee: type === 1 ? f1.arrivee : type === 2 ? f2.eq_arrivee : f3.arrivee,
+    date_depart: type === 1 ? f1.date_depart : type === 2 ? f2.eq_date : f3.date,
+    places_total: type === 1 ? parseInt(f1.places) : 1,
+    places_dispo: type === 1 ? parseInt(f1.places) : 1,
+    prix_par_personne: type === 1 ? (parseFloat(prixPP) || 0) : 0,
+    niveau_requis: type === 1 ? f1.niveau : type === 2 ? f2.eq_niveau : 1,
+    categorie: type === 1 ? f1.categorie : type === 2 ? 'equipier' : 'convoyage',
+    description: type === 1 ? f1.description : type === 2 ? f2.eq_description : f3.description,
+    only_women: type === 1 ? f1.only_women : false,
   }
+
+  const { error } = await supabase.from('trips').insert(tripData)
+  if (error) { console.error(error); return }
+
+  setSubmitted(true)
+  setTimeout(() => navigate('/trajets'), 2000)
+}
 
   if (submitted) return (
     <div className="nt-success">
