@@ -1,0 +1,18 @@
+.fu-wrap{display:flex;flex-direction:column;gap:8px;}
+.fu-files{display:flex;flex-wrap:wrap;gap:8px;}
+.fu-file{position:relative;border-radius:10px;overflow:hidden;border:1.5px solid #dde4ec;}
+.fu-img-preview{width:80px;height:80px;object-fit:cover;display:block;}
+.fu-doc-preview{display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f4f6f9;min-width:160px;max-width:240px;}
+.fu-doc-icon{font-size:20px;flex-shrink:0;}
+.fu-doc-name{font-size:12px;color:#1a2332;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fu-remove{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;}
+.fu-remove:hover{background:rgba(239,68,68,.8);}
+.fu-btn{padding:10px 14px;background:white;color:#185fa5;border:1.5px dashed #185fa5;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:6px;}
+.fu-btn:hover{background:#e8f0f9;}
+.fu-btn:disabled{opacity:.5;cursor:not-allowed;}
+.fu-btn.loading{border-style:solid;}
+.fu-spinner{display:inline-block;animation:fu-spin 1s linear infinite;}
+@keyframes fu-spin{to{transform:rotate(360deg);}}
+.fu-error{font-size:12px;color:#ef4444;background:#fef2f2;padding:6px 10px;border-radius:6px;}
+.fu-wrap.compact .fu-btn{padding:7px 12px;font-size:12px;}
+.fu-wrap.compact .fu-img-preview{width:60px;height:60px;}

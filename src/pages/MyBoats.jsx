@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import './MyBoats.css'
 import CityInput from '../components/CityInput'
+import './MyBoats.css'
 
 const TYPES = ['Voilier', 'Catamaran', 'Moteur', 'Semi-rigide', 'Autre']
 

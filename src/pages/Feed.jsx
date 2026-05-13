@@ -1,105 +1,91 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import FileUpload from '../components/FileUpload'
 import './Feed.css'
 
-const MOCK_USERS = [
-  { id: 'tl', nom: 'Thomas Leroy', av: 'TL', avc: '#185fa5', role: 'Skipper', zone: 'Marseille', abonnes: 142, following: false },
-  { id: 'ad', nom: 'Anne-Marie D.', av: 'AD', avc: '#854f0b', role: 'Skippeure', zone: 'Toulon', abonnes: 89, following: true },
-  { id: 'pb', nom: 'Pierre Bernard', av: 'PB', avc: '#0f6e56', role: 'Skipper', zone: 'Brest', abonnes: 67, following: true },
-  { id: 'cd', nom: 'Claire Dubois', av: 'CD', avc: '#993556', role: 'Skippeure', zone: 'Nice', abonnes: 203, following: false },
-]
-
-const MOCK_TRAJETS = [
-  { titre: 'Marseille → Porto-Vecchio', date: '3–12 juin 2026', bateau: 'Sun Odyssey 40' },
-  { titre: 'Marseille → Ibiza', date: '1–10 juil. 2026', bateau: 'Sun Odyssey 40' },
-]
-
-const MOCK_POSTS = [
-  {
-    id: 1, av: 'TL', avc: '#185fa5', nom: 'Thomas Leroy', time: 'il y a 2h',
-    zone: 'Méditerranée', visibilite: 'public',
-    texte: 'Belle traversée hier de Marseille à Bonifacio. Mistral à 25 noeuds, 2m de creux. Équipage au top !',
-    likes: 24, liked: false, comments: [
-      { id: 1, av: 'CD', avc: '#993556', nom: 'Claire D.', time: 'il y a 1h', texte: 'Bravo ! Conditions musclées 💪', likes: 3, liked: false },
-    ], showComments: false
-  },
-  {
-    id: 2, av: 'CD', avc: '#993556', nom: 'Claire Dubois', time: 'il y a 5h',
-    zone: 'Bretagne', visibilite: 'public',
-    texte: 'Mouillage magique ce soir aux Glénan. Coucher de soleil exceptionnel. On repart demain vers Belle-Île.',
-    likes: 41, liked: true, comments: [], showComments: false
-  },
-  {
-    id: 3, av: 'PB', avc: '#0f6e56', nom: 'Pierre Bernard', time: 'hier',
-    zone: 'Corse', visibilite: 'public',
-    texte: 'Arrivée à Porto-Vecchio après 36h de mer. Fatigue mais bonheur immense. La Corse depuis la mer c\'est magique.',
-    likes: 67, liked: false, comments: [], showComments: false
-  },
-  {
-    id: 4, av: 'AD', avc: '#854f0b', nom: 'Anne-Marie D.', time: 'il y a 2j',
-    zone: 'Atlantique', visibilite: 'abonnes',
-    texte: 'Sortie découverte avec 4 nouveaux équipiers aujourd\'hui. Beau temps, belle mer. C\'est pour ça qu\'on navigue !',
-    likes: 33, liked: false, comments: [], showComments: false
-  },
-]
-
 export default function Feed() {
-  const [posts, setPosts] = useState(MOCK_POSTS)
-  const [users, setUsers] = useState(MOCK_USERS)
+  const [posts, setPosts] = useState([])
   const [newText, setNewText] = useState('')
+  const [newPhotos, setNewPhotos] = useState([])
   const [visibilite, setVisibilite] = useState('public')
-  const [selectedTrajet, setSelectedTrajet] = useState(null)
-  const [showTrajetPicker, setShowTrajetPicker] = useState(false)
-  const [showTagPicker, setShowTagPicker] = useState(false)
   const [commentInputs, setCommentInputs] = useState({})
-  const [charCount, setCharCount] = useState(0)
+  const [expandedComments, setExpandedComments] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserId(user.id)
+        supabase.from('users').select('prenom, nom, photo_url').eq('id', user.id).single()
+          .then(({ data }) => setUserProfile(data))
+      }
+    })
+    loadPosts()
+  }, [])
+
+  async function loadPosts() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('feed_posts')
+      .select('*, auteur:auteur_id(prenom, nom, photo_url)')
+      .order('created_at', { ascending: false })
+      .limit(30)
+    if (data) setPosts(data.map(p => ({ ...p, liked: false, likes: p.likes_count || 0, comments: [], showComments: false })))
+    setLoading(false)
+  }
+
+  async function handlePost() {
+    if (!newText.trim() || !userId) return
+    const { data } = await supabase.from('feed_posts').insert({
+      auteur_id: userId,
+      contenu: newText,
+      visibilite,
+      likes_count: 0,
+    }).select('*, auteur:auteur_id(prenom, nom, photo_url)').single()
+    if (data) setPosts(ps => [{ ...data, liked: false, likes: 0, comments: [], showComments: false, photos: newPhotos }, ...ps])
+    setNewText('')
+    setNewPhotos([])
+  }
+
+  async function deletePost(id) {
+    await supabase.from('feed_posts').delete().eq('id', id)
+    setPosts(ps => ps.filter(p => p.id !== id))
+  }
 
   function toggleLike(id) {
-    setPosts(ps => ps.map(p => p.id === id
-      ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 }
-      : p
-    ))
+    setPosts(ps => ps.map(p => p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p))
   }
 
   function toggleComments(id) {
-    setPosts(ps => ps.map(p => p.id === id ? { ...p, showComments: !p.showComments } : p))
+    setExpandedComments(ec => ({ ...ec, [id]: !ec[id] }))
   }
 
   function sendComment(postId) {
     const txt = (commentInputs[postId] || '').trim()
     if (!txt) return
-    const newComment = { id: Date.now(), av: 'SM', avc: '#0f2d52', nom: 'Moi', time: 'à l\'instant', texte: txt }
-    setPosts(ps => ps.map(p => p.id === postId ? { ...p, comments: [...p.comments, newComment] } : p))
+    const newCmt = { id: Date.now(), nom: userProfile ? `${userProfile.prenom} ${userProfile.nom}` : 'Moi', texte: txt, time: 'à l\'instant', liked: false, likes: 0 }
+    setPosts(ps => ps.map(p => p.id === postId ? { ...p, comments: [...(p.comments || []), newCmt] } : p))
     setCommentInputs(ci => ({ ...ci, [postId]: '' }))
   }
 
-  function deletePost(id) {
-    setPosts(ps => ps.filter(p => p.id !== id))
-  }
-
-  function likeComment(postId, commentId) {
+  function likeComment(postId, cId) {
     setPosts(ps => ps.map(p => p.id === postId ? {
-      ...p, comments: p.comments.map(c => c.id === commentId
-        ? { ...c, liked: !c.liked, likes: (c.likes || 0) + (c.liked ? -1 : 1) }
-        : c)
+      ...p, comments: p.comments.map(c => c.id === cId ? { ...c, liked: !c.liked, likes: c.liked ? c.likes - 1 : c.likes + 1 } : c)
     } : p))
   }
 
-  function handlePost() {
-    if (!newText.trim()) return
-    const post = {
-      id: Date.now(), av: 'SM', avc: '#0f2d52', nom: 'Segolene M.',
-      time: 'à l\'instant', zone: selectedTrajet ? 'Mon trajet' : '',
-      visibilite, texte: newText, likes: 0, liked: false,
-      comments: [], showComments: false,
-      trajet: selectedTrajet
-    }
-    setPosts(ps => [post, ...ps])
-    setNewText(''); setCharCount(0); setSelectedTrajet(null)
+  function handlePhotoUpload(files) {
+    const arr = Array.isArray(files) ? files : [files]
+    setNewPhotos(p => [...p, ...arr].slice(0, 4))
   }
 
-  function toggleFollow(id) {
-    setUsers(us => us.map(u => u.id === id ? { ...u, following: !u.following } : u))
+  function removeNewPhoto(idx) {
+    setNewPhotos(p => p.filter((_, i) => i !== idx))
   }
+
+  const myAv = userProfile ? `${userProfile.prenom?.[0] || ''}${userProfile.nom?.[0] || ''}` : 'M'
 
   return (
     <div className="feed-page">
@@ -111,22 +97,21 @@ export default function Feed() {
         {/* Composer */}
         <div className="feed-composer">
           <div className="feed-composer-top">
-            <div className="feed-composer-av">SM</div>
-            <textarea
-              className="feed-composer-input"
-              value={newText}
-              onChange={e => { setNewText(e.target.value); setCharCount(e.target.value.length) }}
-              placeholder="Partagez votre expérience nautique..."
-              rows={3}
-              maxLength={500}
-            />
+            <div className="feed-composer-av">{myAv}</div>
+            <textarea className="feed-composer-input" value={newText}
+              onChange={e => setNewText(e.target.value)}
+              placeholder="Partagez votre expérience nautique..." rows={3} maxLength={500} />
           </div>
 
-          {/* Trajet attaché */}
-          {selectedTrajet && (
-            <div className="feed-trajet-tag">
-              ⛵ {selectedTrajet.titre} · {selectedTrajet.date}
-              <button className="feed-trajet-remove" onClick={() => setSelectedTrajet(null)}>✕</button>
+          {/* Photos sélectionnées */}
+          {newPhotos.length > 0 && (
+            <div className="feed-new-photos">
+              {newPhotos.map((p, i) => (
+                <div key={i} className="feed-new-photo">
+                  <img src={p.url} alt="" />
+                  <button onClick={() => removeNewPhoto(i)}>✕</button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -136,139 +121,93 @@ export default function Feed() {
               <button className={`feed-vis-btn ${visibilite === 'abonnes' ? 'active' : ''}`} onClick={() => setVisibilite('abonnes')}>🔒 Abonnés</button>
             </div>
             <div className="feed-toolbar">
-              <button className="feed-tool-btn" onClick={() => setShowTagPicker(true)} title="Taguer">👤</button>
-              <button className="feed-tool-btn" onClick={() => setShowTrajetPicker(true)} title="Rattacher un trajet">⛵</button>
-              <span className="feed-char-count">{charCount}/500</span>
+              {newPhotos.length < 4 && (
+                <FileUpload
+                  bucket="posts"
+                  folder={userId}
+                  accept="image/*"
+                  multiple
+                  maxFiles={4}
+                  label=""
+                  existingFiles={newPhotos}
+                  onUpload={handlePhotoUpload}
+                  compact
+                />
+              )}
               <button className="feed-post-btn" disabled={!newText.trim()} onClick={handlePost}>Publier</button>
             </div>
           </div>
         </div>
 
-        {/* Suggestions à suivre */}
-        <div className="feed-suggestions">
-          <div className="feed-suggestions-title">Personnes à suivre</div>
-          <div className="feed-suggestions-list">
-            {users.filter(u => !u.following).slice(0, 3).map(u => (
-              <div key={u.id} className="feed-suggestion-item">
-                <div className="feed-sug-av" style={{ background: u.avc }}>{u.av}</div>
-                <div className="feed-sug-info">
-                  <div className="feed-sug-nom">{u.nom}</div>
-                  <div className="feed-sug-role">{u.role} · {u.zone}</div>
-                </div>
-                <button className="feed-follow-btn" onClick={() => toggleFollow(u.id)}>Suivre</button>
-              </div>
-            ))}
-          </div>
-        </div>
+        {loading && <div style={{ textAlign: 'center', padding: 20, color: '#6b7e94' }}>Chargement...</div>}
 
-        {/* Posts */}
-        {posts.map(p => (
-          <div key={p.id} className="feed-post">
-            <div className="feed-post-header">
-              <div className="feed-post-av" style={{ background: p.avc }}>{p.av}</div>
-              <div className="feed-post-meta">
-                <div className="feed-post-auteur">{p.nom}</div>
-                <div className="feed-post-time">
-                  {p.time}
-                  {p.zone && <span className="feed-post-zone"> · {p.zone}</span>}
-                  <span className="feed-post-vis">{p.visibilite === 'public' ? ' 🌐' : ' 🔒'}</span>
+        {posts.map(p => {
+          const auteurNom = p.auteur ? `${p.auteur.prenom} ${p.auteur.nom}` : 'Utilisateur'
+          const auteurAv = p.auteur ? `${p.auteur.prenom?.[0] || ''}${p.auteur.nom?.[0] || ''}` : 'U'
+          const isMe = p.auteur_id === userId
+          const timeAff = new Date(p.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+          const showCmts = expandedComments[p.id]
+
+          return (
+            <div key={p.id} className="feed-post">
+              <div className="feed-post-header">
+                <div className="feed-post-av" style={{ background: '#185fa5' }}>{auteurAv}</div>
+                <div className="feed-post-meta">
+                  <div className="feed-post-auteur">{auteurNom}</div>
+                  <div className="feed-post-time">{timeAff}<span className="feed-post-vis">{p.visibilite === 'public' ? ' 🌐' : ' 🔒'}</span></div>
                 </div>
               </div>
-            </div>
 
-            {/* Trajet rattaché */}
-            {p.trajet && (
-              <div className="feed-post-trajet">⛵ {p.trajet.titre} · {p.trajet.date}</div>
-            )}
+              <p className="feed-post-texte">{p.contenu}</p>
 
-            <p className="feed-post-texte">{p.texte}</p>
+              {/* Photos du post */}
+              {p.photos && p.photos.length > 0 && (
+                <div className={`feed-post-photos feed-photos-${p.photos.length}`}>
+                  {p.photos.map((ph, i) => (
+                    <img key={i} src={ph.url} alt="" className="feed-post-photo" />
+                  ))}
+                </div>
+              )}
 
-            <div className="feed-post-actions">
-              <button className={`feed-action ${p.liked ? 'liked' : ''}`} onClick={() => toggleLike(p.id)}>
-                {p.liked ? '❤️' : '🤍'} {p.likes}
-              </button>
-              <button className="feed-action" onClick={() => toggleComments(p.id)}>
-                💬 {p.comments.length}
-              </button>
-              <button className="feed-action">↗️ Partager</button>
-              {p.av === 'SM' && (
-                <button className="feed-action delete" onClick={() => deletePost(p.id)}>🗑</button>
+              <div className="feed-post-actions">
+                <button className={`feed-action ${p.liked ? 'liked' : ''}`} onClick={() => toggleLike(p.id)}>
+                  {p.liked ? '❤️' : '🤍'} {p.likes}
+                </button>
+                <button className="feed-action" onClick={() => toggleComments(p.id)}>
+                  💬 {p.comments?.length || 0}
+                </button>
+                <button className="feed-action">↗️ Partager</button>
+                {isMe && <button className="feed-action delete" onClick={() => deletePost(p.id)}>🗑</button>}
+              </div>
+
+              {showCmts && (
+                <div className="feed-comments">
+                  {(p.comments || []).map(c => (
+                    <div key={c.id} className="feed-comment">
+                      <div className="feed-cmt-av" style={{ background: '#185fa5' }}>{c.nom?.[0] || 'U'}</div>
+                      <div className="feed-cmt-body">
+                        <span className="feed-cmt-nom">{c.nom}</span>
+                        <span className="feed-cmt-time"> · {c.time}</span>
+                        <div className="feed-cmt-texte">{c.texte}</div>
+                        <button className={`feed-cmt-like ${c.liked ? 'liked' : ''}`} onClick={() => likeComment(p.id, c.id)}>
+                          {c.liked ? '❤️' : '🤍'} {c.likes}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="feed-cmt-input-wrap">
+                    <input className="feed-cmt-input" placeholder="Votre commentaire..."
+                      value={commentInputs[p.id] || ''}
+                      onChange={e => setCommentInputs(ci => ({ ...ci, [p.id]: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && sendComment(p.id)} />
+                    <button className="feed-cmt-send" onClick={() => sendComment(p.id)}>→</button>
+                  </div>
+                </div>
               )}
             </div>
-
-            {/* Commentaires */}
-            {p.showComments && (
-              <div className="feed-comments">
-                {p.comments.map(c => (
-                  <div key={c.id} className="feed-comment">
-                    <div className="feed-cmt-av" style={{ background: c.avc }}>{c.av}</div>
-                    <div className="feed-cmt-body">
-                      <span className="feed-cmt-nom">{c.nom}</span>
-                      <span className="feed-cmt-time"> · {c.time}</span>
-                      <div className="feed-cmt-texte">{c.texte}</div>
-                      <button className={`feed-cmt-like ${c.liked ? 'liked' : ''}`} onClick={() => likeComment(p.id, c.id)}>
-                        {c.liked ? '❤️' : '🤍'} {c.likes || 0}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <div className="feed-cmt-input-wrap">
-                  <input
-                    className="feed-cmt-input"
-                    placeholder="Votre commentaire..."
-                    value={commentInputs[p.id] || ''}
-                    onChange={e => setCommentInputs(ci => ({ ...ci, [p.id]: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && sendComment(p.id)}
-                  />
-                  <button className="feed-cmt-send" onClick={() => sendComment(p.id)}>→</button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
-
-      {/* Modal taguer */}
-      {showTagPicker && (
-        <div className="feed-modal-overlay" onClick={() => setShowTagPicker(false)}>
-          <div className="feed-modal" onClick={e => e.stopPropagation()}>
-            <div className="feed-modal-title">Taguer des personnes</div>
-            {MOCK_USERS.map(u => (
-              <div key={u.id} className="feed-tag-item">
-                <div className="feed-sug-av" style={{ background: u.avc }}>{u.av}</div>
-                <div className="feed-sug-info">
-                  <div className="feed-sug-nom">{u.nom}</div>
-                  <div className="feed-sug-role">{u.role}</div>
-                </div>
-                <button className="feed-tag-btn" onClick={() => {
-                  setNewText(t => t + ` @${u.nom}`)
-                  setShowTagPicker(false)
-                }}>Taguer</button>
-              </div>
-            ))}
-            <button className="feed-modal-close" onClick={() => setShowTagPicker(false)}>Fermer</button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal rattacher trajet */}
-      {showTrajetPicker && (
-        <div className="feed-modal-overlay" onClick={() => setShowTrajetPicker(false)}>
-          <div className="feed-modal" onClick={e => e.stopPropagation()}>
-            <div className="feed-modal-title">Rattacher un trajet</div>
-            {MOCK_TRAJETS.map((t, i) => (
-              <div key={i} className="feed-trajet-item" onClick={() => { setSelectedTrajet(t); setShowTrajetPicker(false) }}>
-                <div className="feed-trajet-item-icon">⛵</div>
-                <div>
-                  <div className="feed-trajet-item-titre">{t.titre}</div>
-                  <div className="feed-trajet-item-meta">{t.date} · {t.bateau}</div>
-                </div>
-              </div>
-            ))}
-            <button className="feed-modal-close" onClick={() => setShowTrajetPicker(false)}>Fermer</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

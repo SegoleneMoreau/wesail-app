@@ -1,132 +1,119 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './Meteo.css'
 
 const PORTS = [
-  {id:1,nom:'Marseille',zone:'med',lat:43.296,lng:5.381,vent:15,direction:'NW',vagues:0.8,temp:18,meteo:'☀️'},
-  {id:2,nom:'Nice',zone:'med',lat:43.695,lng:7.271,vent:8,direction:'SE',vagues:0.3,temp:20,meteo:'⛅'},
-  {id:3,nom:'Toulon',zone:'med',lat:43.124,lng:5.928,vent:12,direction:'W',vagues:0.5,temp:19,meteo:'☀️'},
-  {id:4,nom:'Ajaccio',zone:'cors',lat:41.919,lng:8.738,vent:20,direction:'NW',vagues:1.2,temp:17,meteo:'🌬️'},
-  {id:5,nom:'Brest',zone:'bre',lat:48.390,lng:-4.486,vent:25,direction:'SW',vagues:2.1,temp:12,meteo:'🌧️'},
-  {id:6,nom:'Saint-Malo',zone:'bre',lat:48.649,lng:-2.025,vent:18,direction:'W',vagues:1.5,temp:13,meteo:'⛅'},
-  {id:7,nom:'La Rochelle',zone:'atl',lat:46.160,lng:-1.151,vent:14,direction:'NW',vagues:0.9,temp:15,meteo:'⛅'},
-  {id:8,nom:'Bordeaux',zone:'atl',lat:44.837,lng:-0.580,vent:10,direction:'NE',vagues:0.4,temp:16,meteo:'☀️'},
-  {id:9,nom:'Lorient',zone:'bre',lat:47.748,lng:-3.360,vent:22,direction:'SW',vagues:1.8,temp:13,meteo:'🌧️'},
-  {id:10,nom:'Cherbourg',zone:'man',lat:49.635,lng:-1.616,vent:30,direction:'W',vagues:2.5,temp:11,meteo:'⛈️'},
+  { name: 'Marseille', lat: 43.296, lng: 5.381, region: 'Méditerranée' },
+  { name: 'Toulon', lat: 43.124, lng: 5.928, region: 'Méditerranée' },
+  { name: 'Nice', lat: 43.696, lng: 7.271, region: 'Méditerranée' },
+  { name: 'Antibes', lat: 43.584, lng: 7.128, region: 'Méditerranée' },
+  { name: 'Ajaccio', lat: 41.919, lng: 8.738, region: 'Corse' },
+  { name: 'Bastia', lat: 42.702, lng: 9.451, region: 'Corse' },
+  { name: 'Porto-Vecchio', lat: 41.590, lng: 9.279, region: 'Corse' },
+  { name: 'Brest', lat: 48.390, lng: -4.486, region: 'Bretagne' },
+  { name: 'Lorient', lat: 47.748, lng: -3.366, region: 'Bretagne' },
+  { name: 'La Rochelle', lat: 46.160, lng: -1.151, region: 'Atlantique' },
+  { name: 'Bordeaux', lat: 44.837, lng: -0.579, region: 'Atlantique' },
+  { name: 'Saint-Malo', lat: 48.649, lng: -2.026, region: 'Manche' },
+  { name: 'Cherbourg', lat: 49.634, lng: -1.622, region: 'Manche' },
+  { name: 'Le Havre', lat: 49.494, lng: 0.107, region: 'Manche' },
 ]
 
-const ZONES = [
-  {id:'all',label:'Tous'},
-  {id:'med',label:'Méditerranée'},
-  {id:'cors',label:'Corse'},
-  {id:'atl',label:'Atlantique'},
-  {id:'bre',label:'Bretagne'},
-  {id:'man',label:'Manche'},
+const LAYERS = [
+  { id: 'wind', label: '💨 Vent', color: '#185fa5' },
+  { id: 'waves', label: '🌊 Vagues', color: '#0891b2' },
+  { id: 'rain', label: '🌧 Pluie', color: '#7c3aed' },
+  { id: 'temp', label: '🌡 Température', color: '#d97706' },
+  { id: 'pressure', label: '📊 Pression', color: '#0f6e56' },
 ]
-
-function ventColor(v) {
-  if(v < 10) return '#0f6e56'
-  if(v < 20) return '#d97706'
-  if(v < 30) return '#ef4444'
-  return '#7c3aed'
-}
-
-function ventLabel(v) {
-  if(v < 10) return 'Calme'
-  if(v < 20) return 'Brise'
-  if(v < 30) return 'Frais'
-  return 'Fort'
-}
 
 export default function Meteo() {
-  const [activeZone, setActiveZone] = useState('all')
-  const [activePort, setActivePort] = useState(null)
+  const [selectedPort, setSelectedPort] = useState(PORTS[0])
+  const [activeLayer, setActiveLayer] = useState('wind')
+  const [search, setSearch] = useState('')
+  const iframeRef = useRef(null)
 
-  const filtered = activeZone === 'all' ? PORTS : PORTS.filter(p => p.zone === activeZone)
-  const port = activePort ? PORTS.find(p => p.id === activePort) : null
+  const filteredPorts = PORTS.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.region.toLowerCase().includes(search.toLowerCase())
+  )
+
+  // URL Windy embed avec les paramètres
+  const windyUrl = `https://embed.windy.com/embed2.html?lat=${selectedPort.lat}&lon=${selectedPort.lng}&detailLat=${selectedPort.lat}&detailLon=${selectedPort.lng}&width=650&height=450&zoom=8&level=surface&overlay=${activeLayer}&product=ecmwf&menu=&message=true&marker=true&calendar=now&pressure=true&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1`
 
   return (
     <div className="meteo-page">
       <div className="meteo-topbar">
-        <span className="meteo-topbar-title">Cartes & Météo marines</span>
+        <span className="meteo-topbar-title">Météo Marine</span>
       </div>
 
-      <div className="meteo-content">
-        {/* Zones */}
-        <div className="meteo-zones">
-          {ZONES.map(z => (
-            <button key={z.id} className={`meteo-zone ${activeZone===z.id?'active':''}`} onClick={() => setActiveZone(z.id)}>
-              {z.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Carte placeholder */}
-        <div className="meteo-map">
-          <div className="meteo-map-placeholder">
-            <div className="meteo-map-icon">🗺️</div>
-            <div className="meteo-map-text">Carte marine interactive</div>
-            <div className="meteo-map-sub">Leaflet + OpenSeaMap — disponible en production</div>
+      <div className="meteo-layout">
+        {/* Sidebar ports */}
+        <div className="meteo-sidebar">
+          <div className="meteo-search-wrap">
+            <input
+              className="meteo-search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher un port..."
+            />
           </div>
-          {/* Pins des ports */}
-          <div className="meteo-pins">
-            {filtered.map(p => (
-              <button key={p.id} className={`meteo-pin ${activePort===p.id?'active':''}`} onClick={() => setActivePort(p.id === activePort ? null : p.id)}>
-                <span>{p.meteo}</span>
-                <span className="meteo-pin-nom">{p.nom}</span>
+          <div className="meteo-ports-list">
+            {filteredPorts.map(p => (
+              <button
+                key={p.name}
+                className={`meteo-port-btn ${selectedPort.name === p.name ? 'active' : ''}`}
+                onClick={() => setSelectedPort(p)}
+              >
+                <div className="meteo-port-name">📍 {p.name}</div>
+                <div className="meteo-port-region">{p.region}</div>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Détail port sélectionné */}
-        {port && (
-          <div className="meteo-detail">
-            <div className="meteo-detail-header">
-              <span className="meteo-detail-icon">{port.meteo}</span>
-              <div>
-                <div className="meteo-detail-nom">{port.nom}</div>
-                <div className="meteo-detail-zone">{port.zone.toUpperCase()}</div>
-              </div>
-              <button className="meteo-detail-close" onClick={() => setActivePort(null)}>✕</button>
-            </div>
-            <div className="meteo-detail-grid">
-              <div className="meteo-stat">
-                <div className="meteo-stat-val" style={{color:ventColor(port.vent)}}>{port.vent} kts</div>
-                <div className="meteo-stat-label">Vent</div>
-                <div className="meteo-stat-sub">{ventLabel(port.vent)} · {port.direction}</div>
-              </div>
-              <div className="meteo-stat">
-                <div className="meteo-stat-val">{port.vagues}m</div>
-                <div className="meteo-stat-label">Vagues</div>
-                <div className="meteo-stat-sub">Hauteur significative</div>
-              </div>
-              <div className="meteo-stat">
-                <div className="meteo-stat-val">{port.temp}°C</div>
-                <div className="meteo-stat-label">Température</div>
-                <div className="meteo-stat-sub">Air</div>
-              </div>
-            </div>
+        {/* Carte et couches */}
+        <div className="meteo-main">
+          {/* Couches */}
+          <div className="meteo-layers">
+            {LAYERS.map(l => (
+              <button
+                key={l.id}
+                className={`meteo-layer-btn ${activeLayer === l.id ? 'active' : ''}`}
+                style={activeLayer === l.id ? { background: l.color + '22', borderColor: l.color, color: l.color } : {}}
+                onClick={() => setActiveLayer(l.id)}
+              >
+                {l.label}
+              </button>
+            ))}
           </div>
-        )}
 
-        {/* Liste ports */}
-        <div className="meteo-list">
-          <div className="meteo-list-title">Conditions par port</div>
-          {filtered.map(p => (
-            <div key={p.id} className={`meteo-row ${activePort===p.id?'active':''}`} onClick={() => setActivePort(p.id === activePort ? null : p.id)}>
-              <div className="meteo-row-left">
-                <span className="meteo-row-icon">{p.meteo}</span>
-                <div>
-                  <div className="meteo-row-nom">{p.nom}</div>
-                  <div className="meteo-row-sub">{ventLabel(p.vent)} · {p.direction}</div>
-                </div>
-              </div>
-              <div className="meteo-row-right">
-                <div className="meteo-row-vent" style={{color:ventColor(p.vent)}}>{p.vent} kts</div>
-                <div className="meteo-row-vagues">{p.vagues}m</div>
-              </div>
-            </div>
-          ))}
+          {/* Carte Windy */}
+          <div className="meteo-map-wrap">
+            <iframe
+              ref={iframeRef}
+              key={`${selectedPort.name}-${activeLayer}`}
+              src={windyUrl}
+              className="meteo-windy-iframe"
+              frameBorder="0"
+              title={`Météo ${selectedPort.name}`}
+              allowFullScreen
+            />
+          </div>
+
+          {/* Info port sélectionné */}
+          <div className="meteo-port-info">
+            <div className="meteo-port-info-name">📍 {selectedPort.name}</div>
+            <div className="meteo-port-info-region">{selectedPort.region}</div>
+            <div className="meteo-port-info-coords">{selectedPort.lat.toFixed(3)}°N · {selectedPort.lng.toFixed(3)}°{selectedPort.lng >= 0 ? 'E' : 'W'}</div>
+            <a
+              className="meteo-windy-link"
+              href={`https://www.windy.com/${selectedPort.lat}/${selectedPort.lng}?${activeLayer}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ouvrir dans Windy ↗
+            </a>
+          </div>
         </div>
       </div>
     </div>

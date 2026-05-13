@@ -1,144 +1,192 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import FileUpload from '../components/FileUpload'
 import './Profile.css'
 
-const NIVEAUX = ['','Débutant','Initié','Expérimenté','Skipper']
+const NIVEAUX = [
+  { v: 1, l: 'Débutant', s: 'Quelques sorties en mer' },
+  { v: 2, l: 'Initié', s: 'Navigations côtières' },
+  { v: 3, l: 'Expérimenté', s: 'Traversées et navigation hauturière' },
+  { v: 4, l: 'Skipper', s: 'Skipper confirmé, compétences avancées' },
+]
 
 export default function Profile() {
-  const navigate = useNavigate()
-  const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ prenom: '', nom: '', bio: '', niveau: 1, genre: 'f' })
+  const [photoUrl, setPhotoUrl] = useState(null)
+  const [documents, setDocuments] = useState([])
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({})
   const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUser(data.user)
-        supabase.from('users').select('*').eq('id', data.user.id).single()
-          .then(({ data: prof }) => {
-            if (prof) { setProfile(prof); setForm(prof) }
-            else {
-              const meta = data.user.user_metadata || {}
-              const defaultProf = { prenom: meta.prenom||'', nom: meta.nom||'', genre: meta.genre||'m', niveau: meta.niveau||1, bio:'' }
-              setForm(defaultProf)
-            }
-          })
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserId(user.id)
+        loadProfile(user.id)
       }
     })
   }, [])
 
-  function update(k, v) { setForm(f => ({...f, [k]:v})) }
-
-  async function handleSave() {
-    setSaving(true)
-    await supabase.from('users').upsert({ ...form, id: user.id, email: user.email })
-    setProfile(form)
-    setSaving(false)
-    setEditing(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  async function loadProfile(uid) {
+    setLoading(true)
+    const { data } = await supabase.from('users').select('*').eq('id', uid).single()
+    if (data) {
+      setProfile(data)
+      setForm({
+        prenom: data.prenom || '',
+        nom: data.nom || '',
+        bio: data.bio || '',
+        niveau: data.niveau || 1,
+        genre: data.genre || 'f',
+      })
+      setPhotoUrl(data.photo_url || null)
+      // Charger les documents depuis storage
+      const { data: files } = await supabase.storage.from('documents').list(uid + '/')
+      if (files) {
+        const docs = files.map(f => ({
+          name: f.name,
+          url: supabase.storage.from('documents').getPublicUrl(`${uid}/${f.name}`).data.publicUrl,
+          path: `${uid}/${f.name}`
+        }))
+        setDocuments(docs)
+      }
+    }
+    setLoading(false)
   }
 
-  const initials = form.prenom ? form.prenom[0].toUpperCase() + (form.nom?.[0]||'').toUpperCase() : '?'
+  async function handleSave() {
+    if (!userId) return
+    setSaving(true)
+    const { error } = await supabase.from('users').update({
+      prenom: form.prenom,
+      nom: form.nom,
+      bio: form.bio,
+      niveau: form.niveau,
+      genre: form.genre,
+      photo_url: photoUrl,
+    }).eq('id', userId)
+    setSaving(false)
+    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+  }
+
+  async function handlePhotoUpload(file) {
+    setPhotoUrl(file.url)
+  }
+
+  async function handleDocUpload(files) {
+    const newDocs = Array.isArray(files) ? files : [files]
+    setDocuments(d => [...d, ...newDocs])
+  }
+
+  async function removeDocument(idx) {
+    const doc = documents[idx]
+    if (doc.path) await supabase.storage.from('documents').remove([doc.path])
+    setDocuments(d => d.filter((_, i) => i !== idx))
+  }
+
+  function u(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  if (loading) return <div className="prof-loading">Chargement...</div>
+
+  const initials = profile ? `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}` : 'U'
 
   return (
     <div className="prof-page">
-      <div className="prof-header">
-        <button className="prof-back" onClick={() => navigate('/')}>← Retour</button>
-        <span className="prof-header-title">Mon profil</span>
-        <button className="prof-edit-btn" onClick={() => editing ? handleSave() : setEditing(true)}>
-          {saving ? 'Enregistrement...' : editing ? '✓ Sauvegarder' : '✏️ Modifier'}
+      <div className="prof-topbar">
+        <span className="prof-topbar-title">Mon profil</span>
+        <button className="prof-save-btn" onClick={handleSave} disabled={saving}>
+          {saving ? 'Enregistrement...' : saved ? '✓ Sauvegardé' : 'Sauvegarder'}
         </button>
       </div>
 
-      {saved && <div className="prof-saved">✓ Profil mis à jour !</div>}
-
       <div className="prof-content">
-        {/* Avatar */}
-        <div className="prof-avatar-section">
-          <div className="prof-avatar">{initials}</div>
-          <div className="prof-avatar-info">
-            <div className="prof-name">{form.prenom} {form.nom}</div>
-            <div className="prof-meta">{NIVEAUX[form.niveau||1]} · {form.genre==='f'?'Femme':'Homme'}</div>
+        {/* Photo de profil */}
+        <div className="prof-section">
+          <div className="prof-section-title">Photo de profil</div>
+          <div className="prof-photo-wrap">
+            <div className="prof-avatar-big">
+              {photoUrl ? (
+                <img src={photoUrl} alt="Avatar" className="prof-avatar-img" />
+              ) : (
+                <span className="prof-avatar-initials">{initials}</span>
+              )}
+            </div>
+            <div className="prof-photo-actions">
+              <FileUpload
+                bucket="avatars"
+                folder={userId}
+                accept="image/*"
+                label="Changer la photo"
+                onUpload={handlePhotoUpload}
+                compact
+              />
+              {photoUrl && (
+                <button className="prof-photo-remove" onClick={() => setPhotoUrl(null)}>Supprimer</button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Infos */}
+        {/* Infos personnelles */}
         <div className="prof-section">
           <div className="prof-section-title">Informations personnelles</div>
           <div className="prof-row">
             <div className="prof-field">
-              <label>Prénom</label>
-              {editing ? <input value={form.prenom||''} onChange={e=>update('prenom',e.target.value)} /> : <div className="prof-val">{form.prenom||'—'}</div>}
+              <label>Prénom *</label>
+              <input value={form.prenom} onChange={e => u('prenom', e.target.value)} placeholder="Votre prénom" />
             </div>
             <div className="prof-field">
-              <label>Nom</label>
-              {editing ? <input value={form.nom||''} onChange={e=>update('nom',e.target.value)} /> : <div className="prof-val">{form.nom||'—'}</div>}
+              <label>Nom *</label>
+              <input value={form.nom} onChange={e => u('nom', e.target.value)} placeholder="Votre nom" />
             </div>
-          </div>
-          <div className="prof-field">
-            <label>Email</label>
-            <div className="prof-val">{user?.email}</div>
           </div>
           <div className="prof-field">
             <label>Genre</label>
-            {editing ? (
-              <div className="prof-genre">
-                <button className={`prof-genre-btn ${form.genre==='m'?'active':''}`} onClick={()=>update('genre','m')}>Homme</button>
-                <button className={`prof-genre-btn ${form.genre==='f'?'active':''}`} onClick={()=>update('genre','f')}>Femme</button>
-              </div>
-            ) : <div className="prof-val">{form.genre==='f'?'Femme':'Homme'}</div>}
+            <div className="prof-genre-btns">
+              <button className={`prof-genre-btn ${form.genre === 'f' ? 'active' : ''}`} onClick={() => u('genre', 'f')}>Femme</button>
+              <button className={`prof-genre-btn ${form.genre === 'm' ? 'active' : ''}`} onClick={() => u('genre', 'm')}>Homme</button>
+            </div>
+          </div>
+          <div className="prof-field">
+            <label>Bio</label>
+            <textarea value={form.bio} onChange={e => u('bio', e.target.value)}
+              placeholder="Parlez de vous, votre expérience nautique, vos zones favorites..."
+              rows={4} />
           </div>
         </div>
 
         {/* Niveau */}
         <div className="prof-section">
-          <div className="prof-section-title">Niveau de voile</div>
-          {editing ? (
-            <div className="prof-niveaux">
-              {[1,2,3,4].map(n => (
-                <button key={n} className={`prof-niveau-btn ${form.niveau===n?'active':''}`} onClick={()=>update('niveau',n)}>
-                  <div className="prof-niveau-label">{NIVEAUX[n]}</div>
-                  <div className="prof-niveau-sub">{['','Quelques sorties','Navigations côtières','Traversées','Skipper confirmé'][n]}</div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="prof-niveau-display">
-              <div className="prof-niveau-badge">{NIVEAUX[form.niveau||1]}</div>
-              <div className="prof-niveau-dots">
-                {[1,2,3,4].map(n => <div key={n} className={`prof-dot ${n<=(form.niveau||1)?'active':''}`}></div>)}
-              </div>
-            </div>
-          )}
+          <div className="prof-section-title">Niveau de navigation</div>
+          <div className="prof-niveaux">
+            {NIVEAUX.map(n => (
+              <button key={n.v} className={`prof-niveau-btn ${form.niveau === n.v ? 'active' : ''}`}
+                onClick={() => u('niveau', n.v)}>
+                <div className="prof-niveau-label">{n.l}</div>
+                <div className="prof-niveau-sub">{n.s}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Bio */}
+        {/* Documents */}
         <div className="prof-section">
-          <div className="prof-section-title">Présentation</div>
-          {editing ? (
-            <textarea className="prof-bio-input" value={form.bio||''} onChange={e=>update('bio',e.target.value)} placeholder="Parlez de vous, de votre expérience nautique..." rows={4} />
-          ) : (
-            <p className="prof-bio">{form.bio||'Aucune présentation pour le moment.'}</p>
-          )}
+          <div className="prof-section-title">Documents & Certifications</div>
+          <p className="prof-section-sub">CNI, permis côtier, permis hauturier, diplômes, certifications...</p>
+          <FileUpload
+            bucket="documents"
+            folder={userId}
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+            multiple
+            maxFiles={10}
+            label="Ajouter un document"
+            existingFiles={documents}
+            onUpload={handleDocUpload}
+            onRemove={removeDocument}
+          />
         </div>
-
-        {/* Stats */}
-        <div className="prof-stats">
-          <div className="prof-stat"><div className="prof-stat-val">0</div><div className="prof-stat-label">Trajets</div></div>
-          <div className="prof-stat"><div className="prof-stat-val">—</div><div className="prof-stat-label">Note</div></div>
-          <div className="prof-stat"><div className="prof-stat-val">0</div><div className="prof-stat-label">Avis</div></div>
-          <div className="prof-stat"><div className="prof-stat-val">0</div><div className="prof-stat-label">Milles</div></div>
-        </div>
-
-        {/* Déconnexion */}
-        <button className="prof-logout" onClick={async()=>{await supabase.auth.signOut();navigate('/auth')}}>
-          Se déconnecter
-        </button>
       </div>
     </div>
   )
