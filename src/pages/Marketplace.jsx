@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import CityInput from '../components/CityInput'
 import './Marketplace.css'
 
 const CATEGORIES = [
@@ -16,15 +17,18 @@ function formatPrix(p) {
   return p >= 1000 ? (p/1000).toFixed(0)+'k €' : p+' €'
 }
 
+const EMPTY_FORM = { titre:'', cat:'electronique', prix:'', ville:'', desc:'', nego: false }
+
 export default function Marketplace() {
   const [listings, setListings] = useState([])
   const [activeCat, setActiveCat] = useState('all')
   const [showNew, setShowNew] = useState(false)
+  const [editListing, setEditListing] = useState(null)
   const [search, setSearch] = useState('')
   const [deleteId, setDeleteId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState(null)
-  const [newForm, setNewForm] = useState({ titre:'', cat:'electronique', prix:'', ville:'', desc:'', nego: false })
+  const [newForm, setNewForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -45,23 +49,36 @@ export default function Marketplace() {
     setLoading(false)
   }
 
-  async function publishListing() {
+  function openNew() {
+    setNewForm(EMPTY_FORM)
+    setEditListing(null)
+    setShowNew(true)
+  }
+
+  function openEdit(l) {
+    setNewForm({ titre: l.titre, cat: l.categorie, prix: l.prix || '', ville: l.ville || '', desc: l.description || '', nego: l.negociable || false })
+    setEditListing(l)
+    setShowNew(true)
+  }
+
+  async function saveListing() {
     if (!newForm.titre || !newForm.prix || !userId) return
     setSaving(true)
-    const { data } = await supabase.from('listings').insert({
-      vendeur_id: userId,
-      titre: newForm.titre,
-      categorie: newForm.cat,
-      prix: parseFloat(newForm.prix),
-      negociable: newForm.nego,
-      ville: newForm.ville || null,
-      description: newForm.desc || null,
-      statut: 'actif',
-    }).select('*, vendeur:vendeur_id(prenom, nom)').single()
-    if (data) setListings(ls => [data, ...ls])
-    setNewForm({ titre:'', cat:'electronique', prix:'', ville:'', desc:'', nego: false })
+    const payload = {
+      titre: newForm.titre, categorie: newForm.cat,
+      prix: parseFloat(newForm.prix), negociable: newForm.nego,
+      ville: newForm.ville || null, description: newForm.desc || null,
+    }
+    if (editListing) {
+      const { data } = await supabase.from('listings').update(payload).eq('id', editListing.id).select('*, vendeur:vendeur_id(prenom, nom)').single()
+      if (data) setListings(ls => ls.map(l => l.id === editListing.id ? data : l))
+    } else {
+      const { data } = await supabase.from('listings').insert({ ...payload, vendeur_id: userId, statut: 'actif' }).select('*, vendeur:vendeur_id(prenom, nom)').single()
+      if (data) setListings(ls => [data, ...ls])
+    }
     setSaving(false)
     setShowNew(false)
+    setEditListing(null)
   }
 
   async function deleteListing(id) {
@@ -80,7 +97,7 @@ export default function Marketplace() {
     <div className="market-page">
       <div className="market-topbar">
         <span className="market-topbar-title">Marketplace</span>
-        <button className="market-new-btn" onClick={() => setShowNew(true)}>+ Vendre</button>
+        <button className="market-new-btn" onClick={openNew}>+ Vendre</button>
       </div>
 
       <div className="market-content">
@@ -112,7 +129,10 @@ export default function Marketplace() {
                   <div className="market-card-header">
                     <div className="market-card-titre">{l.titre}</div>
                     {isMine && (
-                      <button className="market-delete-btn" onClick={() => setDeleteId(l.id)} title="Supprimer">🗑</button>
+                      <div className="market-card-mine-actions">
+                        <button className="market-edit-btn" onClick={() => openEdit(l)} title="Modifier">✏️</button>
+                        <button className="market-delete-btn" onClick={() => setDeleteId(l.id)} title="Supprimer">🗑</button>
+                      </div>
                     )}
                   </div>
                   <div className="market-card-vendeur">
@@ -150,11 +170,11 @@ export default function Marketplace() {
         </div>
       )}
 
-      {/* Modal vendre */}
+      {/* Modal ajouter/modifier */}
       {showNew && (
         <div className="market-modal-overlay" onClick={() => setShowNew(false)}>
           <div className="market-modal" onClick={e => e.stopPropagation()}>
-            <div className="market-modal-title">Déposer une annonce</div>
+            <div className="market-modal-title">{editListing ? 'Modifier l\'annonce' : 'Déposer une annonce'}</div>
             <div className="market-modal-field">
               <label>Titre *</label>
               <input value={newForm.titre} onChange={e=>setNewForm(f=>({...f,titre:e.target.value}))} placeholder="ex: GPS Garmin GPSMAP..." />
@@ -171,7 +191,7 @@ export default function Marketplace() {
             </div>
             <div className="market-modal-field">
               <label>Ville</label>
-              <input value={newForm.ville} onChange={e=>setNewForm(f=>({...f,ville:e.target.value}))} placeholder="ex: Marseille" />
+              <CityInput value={newForm.ville} onChange={v=>setNewForm(f=>({...f,ville:v}))} placeholder="ex: Marseille" />
             </div>
             <div className="market-modal-field">
               <label>Description</label>
@@ -182,9 +202,9 @@ export default function Marketplace() {
               Prix négociable
             </label>
             <div className="market-modal-btns">
-              <button className="market-modal-cancel" onClick={() => setShowNew(false)}>Annuler</button>
-              <button className="market-modal-send" disabled={!newForm.titre||!newForm.prix||saving} onClick={publishListing}>
-                {saving ? 'Publication...' : 'Publier'}
+              <button className="market-modal-cancel" onClick={() => { setShowNew(false); setEditListing(null) }}>Annuler</button>
+              <button className="market-modal-send" disabled={!newForm.titre||!newForm.prix||saving} onClick={saveListing}>
+                {saving ? 'Enregistrement...' : editListing ? 'Modifier' : 'Publier'}
               </button>
             </div>
           </div>

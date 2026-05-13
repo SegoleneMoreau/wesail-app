@@ -18,18 +18,15 @@ export default function Forum() {
   const [showNew, setShowNew] = useState(false)
   const [newPost, setNewPost] = useState({ titre: '', cat: 'meteo', texte: '' })
   const [commentInputs, setCommentInputs] = useState({})
+  const [editCommentId, setEditCommentId] = useState(null)
+  const [editCommentText, setEditCommentText] = useState('')
   const [expandedComments, setExpandedComments] = useState({})
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState(null)
-  const [userProfile, setUserProfile] = useState(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserId(user.id)
-        supabase.from('users').select('prenom, nom').eq('id', user.id).single()
-          .then(({ data }) => setUserProfile(data))
-      }
+      if (user) setUserId(user.id)
     })
     loadPosts()
   }, [])
@@ -38,21 +35,18 @@ export default function Forum() {
     setLoading(true)
     const { data } = await supabase
       .from('forum_posts')
-      .select('*, auteur:auteur_id(prenom, nom), forum_comments(id, contenu, created_at, auteur:auteur_id(prenom, nom))')
+      .select('*, auteur:auteur_id(prenom, nom), forum_comments(id, contenu, created_at, auteur_id, auteur:auteur_id(prenom, nom))')
       .order('created_at', { ascending: false })
-    if (data) setPosts(data.map(p => ({ ...p, liked: false, likes: 0, showComments: false })))
+    if (data) setPosts(data.map(p => ({ ...p, liked: false, likes: 0 })))
     setLoading(false)
   }
 
   async function publishPost() {
     if (!newPost.titre || !newPost.texte || !userId) return
     const { data } = await supabase.from('forum_posts').insert({
-      auteur_id: userId,
-      categorie: newPost.cat,
-      titre: newPost.titre,
-      contenu: newPost.texte,
+      auteur_id: userId, categorie: newPost.cat, titre: newPost.titre, contenu: newPost.texte,
     }).select('*, auteur:auteur_id(prenom, nom), forum_comments(id)').single()
-    if (data) setPosts(ps => [{ ...data, liked: false, likes: 0, showComments: false }, ...ps])
+    if (data) setPosts(ps => [{ ...data, liked: false, likes: 0 }, ...ps])
     setNewPost({ titre: '', cat: 'meteo', texte: '' })
     setShowNew(false)
   }
@@ -66,24 +60,32 @@ export default function Forum() {
     const txt = (commentInputs[postId] || '').trim()
     if (!txt || !userId) return
     const { data } = await supabase.from('forum_comments').insert({
-      post_id: postId,
-      auteur_id: userId,
-      contenu: txt,
+      post_id: postId, auteur_id: userId, contenu: txt,
     }).select('*, auteur:auteur_id(prenom, nom)').single()
     if (data) {
       setPosts(ps => ps.map(p => p.id === postId
-        ? { ...p, forum_comments: [...(p.forum_comments || []), data] }
-        : p
-      ))
+        ? { ...p, forum_comments: [...(p.forum_comments || []), data] } : p))
     }
     setCommentInputs(ci => ({ ...ci, [postId]: '' }))
   }
 
+  async function deleteComment(postId, commentId) {
+    await supabase.from('forum_comments').delete().eq('id', commentId)
+    setPosts(ps => ps.map(p => p.id === postId
+      ? { ...p, forum_comments: p.forum_comments.filter(c => c.id !== commentId) } : p))
+  }
+
+  async function saveEditComment(postId) {
+    if (!editCommentText.trim()) return
+    await supabase.from('forum_comments').update({ contenu: editCommentText }).eq('id', editCommentId)
+    setPosts(ps => ps.map(p => p.id === postId
+      ? { ...p, forum_comments: p.forum_comments.map(c => c.id === editCommentId ? { ...c, contenu: editCommentText } : c) } : p))
+    setEditCommentId(null)
+    setEditCommentText('')
+  }
+
   function toggleLike(id) {
-    setPosts(ps => ps.map(p => p.id === id
-      ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 }
-      : p
-    ))
+    setPosts(ps => ps.map(p => p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p))
   }
 
   function toggleComments(id) {
@@ -160,6 +162,9 @@ export default function Forum() {
                   {(p.forum_comments || []).map(c => {
                     const cAv = c.auteur ? `${c.auteur.prenom[0]}${c.auteur.nom[0]}` : 'U'
                     const cNom = c.auteur ? `${c.auteur.prenom} ${c.auteur.nom}` : 'Utilisateur'
+                    const isMyCmt = c.auteur_id === userId
+                    const isEditing = editCommentId === c.id
+
                     return (
                       <div key={c.id} className="fpc-comment">
                         <div className="fpc-cmt-av" style={{ background: '#185fa5' }}>{cAv}</div>
@@ -167,7 +172,29 @@ export default function Forum() {
                           <div className="fpc-cmt-auteur">{cNom}
                             <span className="fpc-cmt-time"> · {new Date(c.created_at).toLocaleDateString('fr-FR')}</span>
                           </div>
-                          <div className="fpc-cmt-texte">{c.contenu}</div>
+                          {isEditing ? (
+                            <div className="fpc-cmt-edit">
+                              <input
+                                className="fpc-cmt-input"
+                                value={editCommentText}
+                                onChange={e => setEditCommentText(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && saveEditComment(p.id)}
+                                autoFocus
+                              />
+                              <div className="fpc-cmt-edit-btns">
+                                <button className="fpc-cmt-edit-save" onClick={() => saveEditComment(p.id)}>Sauvegarder</button>
+                                <button className="fpc-cmt-edit-cancel" onClick={() => setEditCommentId(null)}>Annuler</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="fpc-cmt-texte">{c.contenu}</div>
+                          )}
+                          {isMyCmt && !isEditing && (
+                            <div className="fpc-cmt-actions">
+                              <button className="fpc-cmt-action-btn" onClick={() => { setEditCommentId(c.id); setEditCommentText(c.contenu) }}>✏️ Modifier</button>
+                              <button className="fpc-cmt-action-btn delete" onClick={() => deleteComment(p.id, c.id)}>🗑 Supprimer</button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )

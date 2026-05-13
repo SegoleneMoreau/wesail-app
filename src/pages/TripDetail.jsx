@@ -89,7 +89,7 @@ export default function TripDetail() {
   return (
     <div className="td-page">
       <div className="td-header">
-        <button className="td-back" onClick={() => navigate(-1)}>← Retour</button>
+        <button className="td-back" onClick={() => navigate('/search')}>← Retour</button>
         <span className="td-header-title">Détail du trajet</span>
       </div>
 

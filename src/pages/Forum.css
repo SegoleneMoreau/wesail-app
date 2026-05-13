@@ -64,3 +64,11 @@
 /* Supprimer post */
 .fpc-action.delete{color:#ef4444;margin-left:auto;}
 .fpc-action.delete:hover{background:#fef2f2;}
+.fpc-cmt-actions{display:flex;gap:8px;margin-top:4px;}
+.fpc-cmt-action-btn{background:none;border:none;font-size:11px;color:#b0bfcc;cursor:pointer;padding:2px 6px;border-radius:6px;}
+.fpc-cmt-action-btn:hover{background:#f4f6f9;color:#6b7e94;}
+.fpc-cmt-action-btn.delete:hover{color:#ef4444;}
+.fpc-cmt-edit{display:flex;flex-direction:column;gap:6px;}
+.fpc-cmt-edit-btns{display:flex;gap:6px;}
+.fpc-cmt-edit-save{padding:5px 12px;background:#0f2d52;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}
+.fpc-cmt-edit-cancel{padding:5px 12px;background:white;color:#6b7e94;border:1.5px solid #dde4ec;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;}

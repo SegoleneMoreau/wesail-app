@@ -43,3 +43,6 @@
 .market-moi-badge{display:inline-block;padding:2px 8px;background:#e8f0f9;color:#185fa5;border-radius:10px;font-size:11px;font-weight:500;}
 .market-modal-danger{background:#ef4444!important;}
 .market-modal-send:disabled{opacity:.4;cursor:not-allowed;}
+.market-card-mine-actions{display:flex;gap:4px;}
+.market-edit-btn{background:none;border:none;font-size:14px;cursor:pointer;padding:2px;}
+.market-edit-btn:hover{color:#185fa5;}

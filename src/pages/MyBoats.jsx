@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import './MyBoats.css'
+import CityInput from '../components/CityInput'
 
 const TYPES = ['Voilier', 'Catamaran', 'Moteur', 'Semi-rigide', 'Autre']
 
@@ -151,8 +152,8 @@ export default function MyBoats() {
               </div>
             </div>
             <div className="boats-modal-field"><label>Port d'attache</label>
-              <input value={form.port_attache} onChange={e => u('port_attache', e.target.value)} placeholder="ex: Marseille — Vieux-Port" />
-            </div>
+  <CityInput value={form.port_attache} onChange={v => u('port_attache', v)} placeholder="ex: Marseille — Vieux-Port" showPortsFirst />
+</div>
             <div className="boats-modal-btns">
               <button className="boats-modal-cancel" onClick={() => setShowNew(false)}>Annuler</button>
               <button className="boats-modal-save" disabled={!form.nom || saving} onClick={saveBoat}>
